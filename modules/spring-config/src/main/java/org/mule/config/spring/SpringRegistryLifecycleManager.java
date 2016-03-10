@@ -41,11 +41,16 @@ import org.mule.processor.AbstractMessageProcessorOwner;
 import org.mule.registry.AbstractRegistryBroker;
 import org.mule.routing.requestreply.AbstractAsyncRequestReplyRequester;
 
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
+import java.util.Map;
 import java.util.Set;
 
 public class SpringRegistryLifecycleManager extends RegistryLifecycleManager
 {
+
+    private final Map<ObjectHandle, LifecycleTracker> managedObjects = new HashMap<>();
 
     public SpringRegistryLifecycleManager(String id, SpringRegistry springRegistry, MuleContext muleContext)
     {
@@ -57,8 +62,8 @@ public class SpringRegistryLifecycleManager extends RegistryLifecycleManager
         final LifecycleCallback<AbstractRegistryBroker> emptyCallback = new EmptyLifecycleCallback<>();
         registerPhase(NotInLifecyclePhase.PHASE_NAME, NOT_IN_LIFECYCLE_PHASE, emptyCallback);
         registerPhase(Initialisable.PHASE_NAME, new SpringContextInitialisePhase(), new SpringLifecycleCallback(this));
-        registerPhase(Startable.PHASE_NAME, new MuleContextStartPhase(), emptyCallback);
-        registerPhase(Stoppable.PHASE_NAME, new MuleContextStopPhase(), emptyCallback);
+        registerPhase(Startable.PHASE_NAME, new SpringContextStartPhase(), emptyCallback);
+        registerPhase(Stoppable.PHASE_NAME, new SpringContextStopPhase(), emptyCallback);
         registerPhase(Disposable.PHASE_NAME, new SpringContextDisposePhase());
     }
 
@@ -98,6 +103,40 @@ public class SpringRegistryLifecycleManager extends RegistryLifecycleManager
                     MuleContext.class
             });
         }
+
+        @Override
+        public void applyLifecycle(Object o) throws LifecycleException
+        {
+            super.applyLifecycle(o);
+            getTracker(o).trackAppliedPhase(Initialisable.class);
+        }
+    }
+
+    class SpringContextStartPhase extends MuleContextStartPhase
+    {
+
+        @Override
+        public void applyLifecycle(Object o) throws LifecycleException
+        {
+            super.applyLifecycle(o);
+            getTracker(o).trackAppliedPhase(Startable.class);
+        }
+    }
+
+    class SpringContextStopPhase extends MuleContextStopPhase
+    {
+
+        @Override
+        public void applyLifecycle(Object o) throws LifecycleException
+        {
+            super.applyLifecycle(o);
+            LifecycleTracker tracker = getTracker(o);
+            if (tracker.isPhaseApplied(Startable.class))
+            {
+                super.applyLifecycle(o);
+                tracker.trackAppliedPhase(Disposable.class);
+            }
+        }
     }
 
     /**
@@ -129,8 +168,76 @@ public class SpringRegistryLifecycleManager extends RegistryLifecycleManager
             }
             else
             {
-                super.applyLifecycle(o);
+                LifecycleTracker tracker = getTracker(o);
+                if (tracker.isPhaseApplied(Initialisable.class))
+                {
+                    super.applyLifecycle(o);
+                    tracker.trackAppliedPhase(Disposable.class);
+                }
             }
+        }
+    }
+
+    private LifecycleTracker getTracker(Object object)
+    {
+        final ObjectHandle handle = new ObjectHandle(object);
+        LifecycleTracker tracker = managedObjects.get(handle);
+        if (tracker == null)
+        {
+            tracker = new LifecycleTracker(object);
+            managedObjects.put(handle, tracker);
+        }
+
+        return tracker;
+    }
+
+    private class LifecycleTracker
+    {
+
+        private final Object object;
+        private final Set<Class<?>> appliedPhases = new HashSet<>();
+
+        private LifecycleTracker(Object object)
+        {
+            this.object = object;
+        }
+
+        private boolean isPhaseApplied(Class<?> phaseType)
+        {
+            return phaseType.isInstance(object) && appliedPhases.contains(phaseType);
+        }
+
+        private void trackAppliedPhase(Class<?> phaseType)
+        {
+            appliedPhases.add(phaseType);
+        }
+    }
+
+    private class ObjectHandle
+    {
+
+        private final Object object;
+
+        private ObjectHandle(Object object)
+        {
+            this.object = object;
+        }
+
+        @Override
+        public boolean equals(Object obj)
+        {
+            if (obj instanceof LifecycleTracker)
+            {
+                return object == ((LifecycleTracker) obj).object;
+            }
+
+            return false;
+        }
+
+        @Override
+        public int hashCode()
+        {
+            return System.identityHashCode(object);
         }
     }
 

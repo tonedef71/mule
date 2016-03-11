@@ -101,10 +101,9 @@
 
         <!-- DB Drivers -->
         <dependency>
-            <groupId>org.apache.derby</groupId>
-            <artifactId>derby</artifactId>
-            <version>${derbyVersion}</version>
-            <scope>test</scope>
+            <groupId>com.oracle</groupId>
+            <artifactId>ojdbc7</artifactId>
+            <version>12.1.0.1</version>
         </dependency>
 
         <dependency>

@@ -40,7 +40,7 @@ public class OracleHostPortConfigTestCase extends AbstractHostPortConfigTestCase
     @Override
     protected String getDatabasePortPropertyValue()
     {
-        return "1521";
+        return "32770";
     }
 
 }

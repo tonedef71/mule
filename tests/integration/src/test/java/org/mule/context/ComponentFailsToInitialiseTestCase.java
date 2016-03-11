@@ -20,7 +20,8 @@ public class ComponentFailsToInitialiseTestCase extends FunctionalTestCase
     }
 
     @Test
-    public void failToInitialise() throws Exception {
+    public void failToInitialise() throws Exception
+    {
 
     }
 }

@@ -36,7 +36,7 @@ import java.util.TreeMap;
 public class RegistryLifecycleManager extends AbstractLifecycleManager<Registry> implements RegistryLifecycleHelpers
 {
 
-    private final Map<ObjectHandle, LifecycleTracker> managedObjects = new HashMap<>();
+    private final Map<Integer, Set<String>> managedObjects = new HashMap<>();
 
     protected Map<String, LifecyclePhase> phases = new HashMap<String, LifecyclePhase>();
     protected TreeMap<String, LifecycleCallback> callbacks = new TreeMap<String, LifecycleCallback>();
@@ -98,6 +98,11 @@ public class RegistryLifecycleManager extends AbstractLifecycleManager<Registry>
 
     protected void registerPhase(String phaseName, LifecyclePhase phase)
     {
+        registerPhase(phaseName, phase, new RegistryLifecycleCallback(this));
+    }
+
+    protected void registerPhase(String phaseName, LifecyclePhase phase, LifecycleCallback callback)
+    {
         if (Initialisable.PHASE_NAME.equals(phaseName))
         {
             phase = new LifecyclePhaseWrapper(phase)
@@ -105,13 +110,7 @@ public class RegistryLifecycleManager extends AbstractLifecycleManager<Registry>
                 @Override
                 public void applyLifecycle(Object o) throws LifecycleException
                 {
-                    super.applyLifecycle(o);
-                    LifecycleTracker tracker = getTracker(o);
-                    if (tracker.isPhaseApplied(Startable.class))
-                    {
-                        super.applyLifecycle(o);
-                        tracker.trackAppliedPhase(Disposable.class);
-                    }
+                    applyPhaseAndTrack(delegate, o, getTracker(o), Initialisable.PHASE_NAME);
                 }
             };
         }
@@ -122,8 +121,7 @@ public class RegistryLifecycleManager extends AbstractLifecycleManager<Registry>
                 @Override
                 public void applyLifecycle(Object o) throws LifecycleException
                 {
-                    super.applyLifecycle(o);
-                    getTracker(o).trackAppliedPhase(Startable.class);
+                    applyPhaseAndTrack(delegate, o, getTracker(o), Startable.PHASE_NAME);
                 }
             };
         }
@@ -134,11 +132,17 @@ public class RegistryLifecycleManager extends AbstractLifecycleManager<Registry>
                 @Override
                 public void applyLifecycle(Object o) throws LifecycleException
                 {
-                    LifecycleTracker tracker = getTracker(o);
-                    if (tracker.isPhaseApplied(Startable.class))
+                    final Set<String> tracker = getTracker(o);
+                    if (o instanceof Startable)
                     {
-                        super.applyLifecycle(o);
-                        tracker.trackAppliedPhase(Disposable.class);
+                        if (tracker.contains(Startable.PHASE_NAME))
+                        {
+                            applyPhaseAndTrack(delegate, o, tracker, Stoppable.PHASE_NAME);
+                        }
+                    }
+                    else
+                    {
+                        applyPhaseAndTrack(delegate, o, tracker, Stoppable.PHASE_NAME);
                     }
                 }
             };
@@ -150,23 +154,22 @@ public class RegistryLifecycleManager extends AbstractLifecycleManager<Registry>
                 @Override
                 public void applyLifecycle(Object o) throws LifecycleException
                 {
-                    LifecycleTracker tracker = getTracker(o);
-                    if (tracker.isPhaseApplied(Initialisable.class))
+                    final Set<String> tracker = getTracker(o);
+                    if (o instanceof Initialisable)
                     {
-                        super.applyLifecycle(o);
-                        tracker.trackAppliedPhase(Disposable.class);
+                        if (tracker.contains(Initialisable.PHASE_NAME))
+                        {
+                            applyPhaseAndTrack(delegate, o, tracker, Disposable.PHASE_NAME);
+                        }
+                    }
+                    else
+                    {
+                        applyPhaseAndTrack(delegate, o, tracker, Disposable.PHASE_NAME);
                     }
                 }
             };
         }
 
-        phaseNames.add(phaseName);
-        callbacks.put(phaseName, new RegistryLifecycleCallback(this));
-        phases.put(phaseName, phase);
-    }
-
-    protected void registerPhase(String phaseName, LifecyclePhase phase, LifecycleCallback callback)
-    {
         phaseNames.add(phaseName);
         callbacks.put(phaseName, callback);
         phases.put(phaseName, phase);
@@ -279,67 +282,26 @@ public class RegistryLifecycleManager extends AbstractLifecycleManager<Registry>
         }
     }
 
-    private class LifecycleTracker
-    {
-
-        private final Object object;
-        private final Set<Class<?>> appliedPhases = new HashSet<>();
-
-        private LifecycleTracker(Object object)
-        {
-            this.object = object;
-        }
-
-        private boolean isPhaseApplied(Class<?> phaseType)
-        {
-            return phaseType.isInstance(object) && appliedPhases.contains(phaseType);
-        }
-
-        private void trackAppliedPhase(Class<?> phaseType)
-        {
-            appliedPhases.add(phaseType);
-        }
+    private void applyPhaseAndTrack(LifecyclePhase phase, Object object, Set<String> tracker, String phaseName) throws LifecycleException {
+        phase.applyLifecycle(object);
+        tracker.add(phaseName);
     }
 
-    private class ObjectHandle
+    private Set<String> getTracker(Object object)
     {
-
-        private final Object object;
-
-        private ObjectHandle(Object object)
+        final int key = getLifecycleTrackingKey(object);
+        Set<String> appliedPhases = managedObjects.get(key);
+        if (appliedPhases == null)
         {
-            this.object = object;
+            appliedPhases = new HashSet<>();
+            managedObjects.put(key, appliedPhases);
         }
 
-        @Override
-        public boolean equals(Object obj)
-        {
-            if (obj instanceof LifecycleTracker)
-            {
-                return object == ((LifecycleTracker) obj).object;
-            }
-
-            return false;
-        }
-
-        @Override
-        public int hashCode()
-        {
-            return System.identityHashCode(object);
-        }
+        return appliedPhases;
     }
 
-    private LifecycleTracker getTracker(Object object)
+    private int getLifecycleTrackingKey(Object object)
     {
-        final ObjectHandle handle = new ObjectHandle(object);
-        LifecycleTracker tracker = managedObjects.get(handle);
-        if (tracker == null)
-        {
-            tracker = new LifecycleTracker(object);
-            managedObjects.put(handle, tracker);
-        }
-
-        return tracker;
+        return System.identityHashCode(object);
     }
-
 }

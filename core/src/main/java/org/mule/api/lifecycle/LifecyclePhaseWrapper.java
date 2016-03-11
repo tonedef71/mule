@@ -12,7 +12,7 @@ import java.util.Set;
 
 public abstract class LifecyclePhaseWrapper implements LifecyclePhase
 {
-    private final LifecyclePhase delegate;
+    protected final LifecyclePhase delegate;
 
     public LifecyclePhaseWrapper(LifecyclePhase delegate)
     {

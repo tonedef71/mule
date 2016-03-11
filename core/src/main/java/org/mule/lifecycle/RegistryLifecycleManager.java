@@ -13,6 +13,7 @@ import org.mule.api.lifecycle.Initialisable;
 import org.mule.api.lifecycle.LifecycleCallback;
 import org.mule.api.lifecycle.LifecycleException;
 import org.mule.api.lifecycle.LifecyclePhase;
+import org.mule.api.lifecycle.LifecyclePhaseWrapper;
 import org.mule.api.lifecycle.RegistryLifecycleHelpers;
 import org.mule.api.lifecycle.Startable;
 import org.mule.api.lifecycle.Stoppable;
@@ -26,12 +27,17 @@ import org.mule.lifecycle.phases.NotInLifecyclePhase;
 import org.mule.registry.AbstractRegistryBroker;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 
 
 public class RegistryLifecycleManager extends AbstractLifecycleManager<Registry> implements RegistryLifecycleHelpers
 {
+
+    private final Map<ObjectHandle, LifecycleTracker> managedObjects = new HashMap<>();
+
     protected Map<String, LifecyclePhase> phases = new HashMap<String, LifecyclePhase>();
     protected TreeMap<String, LifecycleCallback> callbacks = new TreeMap<String, LifecycleCallback>();
     protected MuleContext muleContext;
@@ -56,12 +62,13 @@ public class RegistryLifecycleManager extends AbstractLifecycleManager<Registry>
         registerPhase(Disposable.PHASE_NAME, new MuleContextDisposePhase(), callback);
     }
 
-    public RegistryLifecycleManager(String id, Registry object, Map<String, LifecyclePhase> phases )
+    public RegistryLifecycleManager(String id, Registry object, Map<String, LifecyclePhase> phases)
     {
         super(id, object);
         RegistryLifecycleCallback callback = new RegistryLifecycleCallback(this);
 
-        registerPhase(NotInLifecyclePhase.PHASE_NAME, NOT_IN_LIFECYCLE_PHASE, (phaseName, target) -> { });
+        registerPhase(NotInLifecyclePhase.PHASE_NAME, NOT_IN_LIFECYCLE_PHASE, (phaseName, target) -> {
+        });
 
         for (Map.Entry<String, LifecyclePhase> entry : phases.entrySet())
         {
@@ -87,6 +94,68 @@ public class RegistryLifecycleManager extends AbstractLifecycleManager<Registry>
 
     protected void registerPhase(String phaseName, LifecyclePhase phase)
     {
+        if (Initialisable.PHASE_NAME.equals(phaseName))
+        {
+            phase = new LifecyclePhaseWrapper(phase)
+            {
+                @Override
+                public void applyLifecycle(Object o) throws LifecycleException
+                {
+                    super.applyLifecycle(o);
+                    LifecycleTracker tracker = getTracker(o);
+                    if (tracker.isPhaseApplied(Startable.class))
+                    {
+                        super.applyLifecycle(o);
+                        tracker.trackAppliedPhase(Disposable.class);
+                    }
+                }
+            };
+        }
+        else if (Startable.PHASE_NAME.equals(phaseName))
+        {
+            phase = new LifecyclePhaseWrapper(phase)
+            {
+                @Override
+                public void applyLifecycle(Object o) throws LifecycleException
+                {
+                    super.applyLifecycle(o);
+                    getTracker(o).trackAppliedPhase(Startable.class);
+                }
+            };
+        }
+        else if (Stoppable.PHASE_NAME.equals(phaseName))
+        {
+            phase = new LifecyclePhaseWrapper(phase)
+            {
+                @Override
+                public void applyLifecycle(Object o) throws LifecycleException
+                {
+                    LifecycleTracker tracker = getTracker(o);
+                    if (tracker.isPhaseApplied(Startable.class))
+                    {
+                        super.applyLifecycle(o);
+                        tracker.trackAppliedPhase(Disposable.class);
+                    }
+                }
+            };
+        }
+        else if (Disposable.PHASE_NAME.equals(phaseName))
+        {
+            phase = new LifecyclePhaseWrapper(phase)
+            {
+                @Override
+                public void applyLifecycle(Object o) throws LifecycleException
+                {
+                    LifecycleTracker tracker = getTracker(o);
+                    if (tracker.isPhaseApplied(Initialisable.class))
+                    {
+                        super.applyLifecycle(o);
+                        tracker.trackAppliedPhase(Disposable.class);
+                    }
+                }
+            };
+        }
+
         phaseNames.add(phaseName);
         callbacks.put(phaseName, new RegistryLifecycleCallback(this));
         phases.put(phaseName, phase);
@@ -161,30 +230,30 @@ public class RegistryLifecycleManager extends AbstractLifecycleManager<Registry>
     public void applyPhase(Object object, String fromPhase, String toPhase) throws LifecycleException
     {
         //TODO i18n
-        if(fromPhase == null || toPhase==null)
+        if (fromPhase == null || toPhase == null)
         {
             throw new IllegalArgumentException("toPhase and fromPhase must be null");
         }
-        if(!phaseNames.contains(fromPhase))
+        if (!phaseNames.contains(fromPhase))
         {
             throw new IllegalArgumentException("fromPhase '" + fromPhase + "' not a valid phase.");
         }
-        if(!phaseNames.contains(toPhase))
+        if (!phaseNames.contains(toPhase))
         {
             throw new IllegalArgumentException("toPhase '" + fromPhase + "' not a valid phase.");
         }
         boolean start = false;
         for (String phaseName : phaseNames)
         {
-            if(start)
+            if (start)
             {
                 phases.get(phaseName).applyLifecycle(object);
             }
-            if(toPhase.equals(phaseName))
+            if (toPhase.equals(phaseName))
             {
                 break;
             }
-            if(phaseName.equals(fromPhase))
+            if (phaseName.equals(fromPhase))
             {
                 start = true;
             }
@@ -197,13 +266,76 @@ public class RegistryLifecycleManager extends AbstractLifecycleManager<Registry>
         String lastPhase = NotInLifecyclePhase.PHASE_NAME;
         for (String phase : completedPhases)
         {
-            if(isDirectTransition(lastPhase, phase))
+            if (isDirectTransition(lastPhase, phase))
             {
                 LifecyclePhase lp = phases.get(phase);
                 lp.applyLifecycle(object);
                 lastPhase = phase;
             }
         }
+    }
+
+    private class LifecycleTracker
+    {
+
+        private final Object object;
+        private final Set<Class<?>> appliedPhases = new HashSet<>();
+
+        private LifecycleTracker(Object object)
+        {
+            this.object = object;
+        }
+
+        private boolean isPhaseApplied(Class<?> phaseType)
+        {
+            return phaseType.isInstance(object) && appliedPhases.contains(phaseType);
+        }
+
+        private void trackAppliedPhase(Class<?> phaseType)
+        {
+            appliedPhases.add(phaseType);
+        }
+    }
+
+    private class ObjectHandle
+    {
+
+        private final Object object;
+
+        private ObjectHandle(Object object)
+        {
+            this.object = object;
+        }
+
+        @Override
+        public boolean equals(Object obj)
+        {
+            if (obj instanceof LifecycleTracker)
+            {
+                return object == ((LifecycleTracker) obj).object;
+            }
+
+            return false;
+        }
+
+        @Override
+        public int hashCode()
+        {
+            return System.identityHashCode(object);
+        }
+    }
+
+    private LifecycleTracker getTracker(Object object)
+    {
+        final ObjectHandle handle = new ObjectHandle(object);
+        LifecycleTracker tracker = managedObjects.get(handle);
+        if (tracker == null)
+        {
+            tracker = new LifecycleTracker(object);
+            managedObjects.put(handle, tracker);
+        }
+
+        return tracker;
     }
 
 }

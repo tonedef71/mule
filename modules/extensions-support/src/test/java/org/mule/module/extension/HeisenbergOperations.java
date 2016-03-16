@@ -93,7 +93,7 @@ public class HeisenbergOperations
         return door.knock();
     }
 
-    public String killWithWeapon(Weapon weapon)
+    public String killWithWeapon(Weapon weapon, Weapon.WeaponType type, Weapon.WeaponAttributes weaponAttributes)
     {
         return weapon.kill();
     }

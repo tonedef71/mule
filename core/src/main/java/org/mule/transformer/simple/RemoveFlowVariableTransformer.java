@@ -6,18 +6,27 @@
  */
 package org.mule.transformer.simple;
 
-import org.mule.PropertyScope;
+import org.mule.api.MuleEvent;
+
+import java.util.Set;
 
 public class RemoveFlowVariableTransformer extends AbstractRemoveVariablePropertyTransformer
 {
-    @Override
-    public PropertyScope getScope()
-    {
-        return PropertyScope.INVOCATION;
-    }
 
     public void setVariableName(String variableName)
     {
         this.setIdentifier(variableName);
+    }
+
+    @Override
+    protected Set<String> getPropertyNames(MuleEvent event)
+    {
+        return event.getFlowVariableNames();
+    }
+
+    @Override
+    protected void removeProperty(MuleEvent event, String propertyName)
+    {
+       event.removeFlowVariable(propertyName);
     }
 }

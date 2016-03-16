@@ -6,19 +6,26 @@
  */
 package org.mule.transformer.simple;
 
-import org.mule.PropertyScope;
+import org.mule.api.MuleEvent;
+
+import java.util.Set;
 
 public class RemoveSessionVariableTransformer extends AbstractRemoveVariablePropertyTransformer
 {
-    @Override
-    public PropertyScope getScope()
-    {
-        return PropertyScope.SESSION;
-    }
-
     public void setVariableName(String variableName)
     {
         this.setIdentifier(variableName);
     }
 
+    @Override
+    protected void removeProperty(MuleEvent event, String propertyName)
+    {
+        event.getSession().removeProperty(propertyName);
+    }
+
+    @Override
+    protected Set<String> getPropertyNames(MuleEvent event)
+    {
+        return event.getSession().getPropertyNamesAsSet();
+    }
 }

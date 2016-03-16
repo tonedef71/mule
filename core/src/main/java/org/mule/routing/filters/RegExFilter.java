@@ -10,6 +10,7 @@ import static org.mule.util.ClassUtils.hash;
 import org.mule.DefaultMuleEvent;
 import org.mule.MessageExchangePattern;
 import org.mule.api.MuleContext;
+import org.mule.api.MuleEvent;
 import org.mule.api.MuleMessage;
 import org.mule.api.context.MuleContextAware;
 import org.mule.api.lifecycle.Initialisable;
@@ -92,6 +93,26 @@ public class RegExFilter implements Filter, ObjectFilter, MuleContextAware, Init
             else
             {
                 return accept(muleContext.getTransformationService().transform(message, DataTypeFactory.STRING).getPayload());
+            }
+        }
+        catch (Exception e)
+        {
+            throw new IllegalArgumentException(e);
+        }
+    }
+
+    @Override
+    public boolean accept(MuleEvent event)
+    {
+        try
+        {
+            if (value != null && value.getRawValue() != null)
+            {
+                return accept(value.resolveValue(event));
+            }
+            else
+            {
+                return accept(muleContext.getTransformationService().transform(event.getMessage(), DataTypeFactory.STRING).getPayload());
             }
         }
         catch (Exception e)

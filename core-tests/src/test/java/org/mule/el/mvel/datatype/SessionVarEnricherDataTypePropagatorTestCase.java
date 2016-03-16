@@ -7,14 +7,54 @@
 
 package org.mule.el.mvel.datatype;
 
-import static org.mule.el.mvel.MessageVariableResolverFactory.SESSION_VARS;
-import org.mule.PropertyScope;
+import org.junit.Test;
 
-public class SessionVarEnricherDataTypePropagatorTestCase extends AbstractScopedVarAssignmentDataTypePropagatorTestCase
+public class SessionVarEnricherDataTypePropagatorTestCase extends AbstractVarAssignmentDataTypePropagatorTestCase
 {
 
     public SessionVarEnricherDataTypePropagatorTestCase()
     {
-        super(new SessionVarEnricherDataTypePropagator(), PropertyScope.SESSION, SESSION_VARS);
+        super(new SessionVarEnricherDataTypePropagator());
+    }
+
+    @Test
+    public void propagatesVarDataTypeUsingMapSyntax() throws Exception
+    {
+        doSessionVarAssignmentDataTypePropagationTest(createAssignmentExpression("['" + PROPERTY_NAME + "']"));
+    }
+
+    @Test
+    public void propagatesVarDataTypeUsingDotSyntax() throws Exception
+    {
+        doSessionVarAssignmentDataTypePropagationTest(createAssignmentExpression("." + PROPERTY_NAME + ""));
+    }
+
+    @Test
+    public void propagatesVarDataTypeUsingEscapedDotSyntax() throws Exception
+    {
+        doSessionVarAssignmentDataTypePropagationTest(createAssignmentExpression(".'" + PROPERTY_NAME + "'"));
+    }
+
+    @Test
+    public void doesNotChangesVarDataTypeUsingRecursiveMapSyntax() throws Exception
+    {
+        doSessionVarInnerAssignmentDataTypePropagationTest(createAssignmentExpression("['" + PROPERTY_NAME + "']['" + INNER_PROPERTY_NAME + "']"));
+    }
+
+    @Test
+    public void doesNotChangesVarDataTypeUsingRecursiveDotSyntax() throws Exception
+    {
+        doSessionVarInnerAssignmentDataTypePropagationTest(createAssignmentExpression("." + PROPERTY_NAME + "." + INNER_PROPERTY_NAME));
+    }
+
+    @Test
+    public void doesNotChangesVarDataTypeUsingRecursiveEscapedDotSyntax() throws Exception
+    {
+        doSessionVarInnerAssignmentDataTypePropagationTest(createAssignmentExpression(".'" + PROPERTY_NAME + "'.'" + INNER_PROPERTY_NAME + "'"));
+    }
+
+    private String createAssignmentExpression(String accessorExpression)
+    {
+        return "sessionVars" + accessorExpression + " = 'unused'";
     }
 }

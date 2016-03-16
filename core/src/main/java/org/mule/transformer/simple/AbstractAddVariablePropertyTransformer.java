@@ -10,7 +10,6 @@ import org.mule.api.MuleEvent;
 import org.mule.api.lifecycle.InitialisationException;
 import org.mule.api.metadata.DataType;
 import org.mule.api.transformer.TransformerException;
-import org.mule.PropertyScope;
 import org.mule.transformer.AbstractMessageTransformer;
 import org.mule.transformer.types.DataTypeFactory;
 import org.mule.transformer.types.TypedValue;
@@ -53,7 +52,7 @@ public abstract class AbstractAddVariablePropertyTransformer extends AbstractMes
             TypedValue typedValue = valueEvaluator.resolveTypedValue(event);
             if (typedValue.getValue() == null || typedValue.getValue() instanceof NullPayload)
             {
-                event.getMessage().removeProperty(key, getScope());
+                removeProperty(event, key);
 
                 if (logger.isDebugEnabled())
                 {
@@ -68,16 +67,20 @@ public abstract class AbstractAddVariablePropertyTransformer extends AbstractMes
                 {
                     DataType<?> dataType = DataTypeFactory.create(typedValue.getValue().getClass(), getMimeType());
                     dataType.setEncoding(getEncoding());
-                    event.getMessage().setProperty(key, typedValue.getValue(), getScope(), dataType);
+                    addProperty(event, key, typedValue.getValue(), dataType);
                 }
                 else
                 {
-                    event.getMessage().setProperty(key, typedValue.getValue(), getScope(), typedValue.getDataType());
+                    addProperty(event, key, typedValue.getValue(), typedValue.getDataType());
                 }
             }
         }
         return event.getMessage();
     }
+
+    protected abstract void addProperty(MuleEvent event, String propertyName, Object value, DataType dataType);
+
+    protected abstract void removeProperty(MuleEvent event, String propertyName);
 
     @Override
     public Object clone() throws CloneNotSupportedException
@@ -105,7 +108,5 @@ public abstract class AbstractAddVariablePropertyTransformer extends AbstractMes
         }
         this.valueEvaluator = new AttributeEvaluator(value);
     }
-
-    abstract protected PropertyScope getScope();
 
 }

@@ -6,6 +6,7 @@
  */
 package org.mule.api.routing.filter;
 
+import org.mule.api.MuleEvent;
 import org.mule.api.MuleMessage;
 
 /**
@@ -20,5 +21,18 @@ public interface Filter
      * @param message a non null message to filter.
      * @return <code>true</code> if the message matches the filter
      */
+    @Deprecated
     boolean accept(MuleMessage message);
+
+    /**
+     * Check a given event against this filter.
+     *
+     * @param event a non null event to filter.
+     * @return <code>true</code> if the event matches the filter
+     */
+    default boolean accept(MuleEvent event)
+    {
+        return accept(event.getMessage());
+    }
+
 }

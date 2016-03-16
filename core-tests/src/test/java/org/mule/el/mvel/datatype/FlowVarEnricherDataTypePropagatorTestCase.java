@@ -7,14 +7,54 @@
 
 package org.mule.el.mvel.datatype;
 
-import static org.mule.el.mvel.MessageVariableResolverFactory.FLOW_VARS;
-import org.mule.PropertyScope;
+import org.junit.Test;
 
-public class FlowVarEnricherDataTypePropagatorTestCase extends AbstractScopedVarAssignmentDataTypePropagatorTestCase
+public class FlowVarEnricherDataTypePropagatorTestCase extends AbstractVarAssignmentDataTypePropagatorTestCase
 {
 
     public FlowVarEnricherDataTypePropagatorTestCase()
     {
-        super(new FlowVarEnricherDataTypePropagator(), PropertyScope.INVOCATION, FLOW_VARS);
+        super(new FlowVarEnricherDataTypePropagator());
+    }
+
+    @Test
+    public void propagatesVarDataTypeUsingMapSyntax() throws Exception
+    {
+        doFlowVarAssignmentDataTypePropagationTest(createAssignmentExpression("['" + PROPERTY_NAME + "']"));
+    }
+
+    @Test
+    public void propagatesVarDataTypeUsingDotSyntax() throws Exception
+    {
+        doFlowVarAssignmentDataTypePropagationTest(createAssignmentExpression("." + PROPERTY_NAME + ""));
+    }
+
+    @Test
+    public void propagatesVarDataTypeUsingEscapedDotSyntax() throws Exception
+    {
+        doFlowVarAssignmentDataTypePropagationTest(createAssignmentExpression(".'" + PROPERTY_NAME + "'"));
+    }
+
+    @Test
+    public void doesNotChangesVarDataTypeUsingRecursiveMapSyntax() throws Exception
+    {
+        doFlowVarInnerAssignmentDataTypePropagationTest(createAssignmentExpression("['" + PROPERTY_NAME + "']['" + INNER_PROPERTY_NAME + "']"));
+    }
+
+    @Test
+    public void doesNotChangesVarDataTypeUsingRecursiveDotSyntax() throws Exception
+    {
+        doFlowVarInnerAssignmentDataTypePropagationTest(createAssignmentExpression("." + PROPERTY_NAME + "." + INNER_PROPERTY_NAME));
+    }
+
+    @Test
+    public void doesNotChangesVarDataTypeUsingRecursiveEscapedDotSyntax() throws Exception
+    {
+        doFlowVarInnerAssignmentDataTypePropagationTest(createAssignmentExpression(".'" + PROPERTY_NAME + "'.'" + INNER_PROPERTY_NAME + "'"));
+    }
+
+    private String createAssignmentExpression(String accessorExpression)
+    {
+        return "flowVars" + accessorExpression + " = 'unused'";
     }
 }

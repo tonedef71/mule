@@ -10,6 +10,7 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertThat;
+import org.mule.DefaultMuleMessage;
 import org.mule.VoidMuleEvent;
 import org.mule.api.MuleEvent;
 import org.mule.api.MuleException;
@@ -133,6 +134,7 @@ public class UntilSuccessfulTestCase extends AbstractMuleContextTestCase
         untilSuccessful.start();
 
         final MuleEvent testEvent = getTestEvent("test_data");
+        ((DefaultMuleMessage)testEvent.getMessage()).assertAccess(true);
         assertThat(untilSuccessful.process(testEvent).getMessageAsString(), equalTo("ACK"));
         waitDelivery();
     }

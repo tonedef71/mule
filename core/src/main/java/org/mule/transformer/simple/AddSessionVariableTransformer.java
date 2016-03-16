@@ -6,20 +6,29 @@
  */
 package org.mule.transformer.simple;
 
-import org.mule.PropertyScope;
+import org.mule.api.MuleEvent;
+import org.mule.api.metadata.DataType;
+
+import java.io.Serializable;
 
 public class AddSessionVariableTransformer extends AbstractAddVariablePropertyTransformer
 {
 
-    @Override
-    protected PropertyScope getScope()
-    {
-        return PropertyScope.SESSION;
-    }
-
     public void setVariableName(String variableName)
     {
         this.setIdentifier(variableName);
+    }
+
+    @Override
+    protected void addProperty(MuleEvent event, String propertyName, Object value, DataType dataType)
+    {
+        event.getSession().setProperty(propertyName, (Serializable) value, dataType );
+    }
+
+    @Override
+    protected void removeProperty(MuleEvent event, String propertyName)
+    {
+        event.getSession().removeProperty(propertyName);
     }
 
 }

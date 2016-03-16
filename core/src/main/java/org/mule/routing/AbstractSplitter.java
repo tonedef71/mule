@@ -8,7 +8,6 @@ package org.mule.routing;
 
 import org.mule.api.MuleEvent;
 import org.mule.api.MuleException;
-import org.mule.api.MuleMessage;
 import org.mule.routing.outbound.AbstractMessageSequenceSplitter;
 import org.mule.routing.outbound.CollectionMessageSequence;
 
@@ -33,6 +32,6 @@ public abstract class AbstractSplitter extends AbstractMessageSequenceSplitter
         return new CollectionMessageSequence(splitMessage(event));
     }
 
-    protected abstract List<MuleMessage> splitMessage(MuleEvent event) throws MuleException;
+    protected abstract List<MuleEvent> splitMessage(MuleEvent event) throws MuleException;
 
 }

@@ -8,6 +8,7 @@ package org.mule.module.launcher;
 
 import static java.lang.String.format;
 import org.mule.config.PreferredObjectSelector;
+import org.mule.module.artifact.classloader.ClassLoaderLookupPolicyParser;
 import org.mule.module.artifact.descriptor.ArtifactDescriptorFactory;
 import org.mule.module.artifact.descriptor.ArtifactDescriptorCreateException;
 import org.mule.module.launcher.descriptor.ApplicationDescriptor;
@@ -53,12 +54,12 @@ public class ApplicationDescriptorFactory implements ArtifactDescriptorFactory<A
     public static final String PROPERTIES_DESCRIPTOR_PARSER = "properties";
 
     protected Map<String, DescriptorParser> parserRegistry = new HashMap<>();
-    private ApplicationPluginDescriptorFactory pluginDescriptorFactory = new ApplicationPluginDescriptorFactory();
+    private ApplicationPluginDescriptorFactory pluginDescriptorFactory = new ApplicationPluginDescriptorFactory(new ClassLoaderLookupPolicyParser());
 
     public ApplicationDescriptorFactory()
     {
         // defaults first
-        parserRegistry.put(PROPERTIES_DESCRIPTOR_PARSER, new PropertiesDescriptorParser());
+        parserRegistry.put(PROPERTIES_DESCRIPTOR_PARSER, new PropertiesDescriptorParser(new ClassLoaderLookupPolicyParser()));
 
         final Iterator<DescriptorParser> it = ServiceRegistry.lookupProviders(DescriptorParser.class);
 

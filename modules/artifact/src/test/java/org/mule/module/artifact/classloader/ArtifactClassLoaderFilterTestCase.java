@@ -13,64 +13,59 @@ import org.mule.module.artifact.descriptor.ArtifactDescriptor;
 import org.mule.tck.junit4.AbstractMuleTestCase;
 import org.mule.tck.size.SmallTest;
 
+import java.lang.annotation.Annotation;
 import java.util.Collections;
-import java.util.Set;
 
+import org.junit.Before;
 import org.junit.Test;
 
 @SmallTest
 public class ArtifactClassLoaderFilterTestCase extends AbstractMuleTestCase
 {
 
-    public static final String CLASS_NAME = "java.lang.Object";
-    public static final Set<String> CLASS_NAMES = Collections.singleton(CLASS_NAME);
-    public static final String CLASS_PREFIX = "java.lang";
-    public static final Set<String> PREFIX_NAMES = Collections.singleton(CLASS_PREFIX);
-
     private final ArtifactDescriptor descriptor = new ArtifactDescriptor();
     private ArtifactClassLoaderFilter filter = new ArtifactClassLoaderFilter(descriptor);
 
-    @Test
-    public void filtersClassWhenClassAndPrefixAreNotExported() throws Exception
+    @Before
+    public void setUp() throws Exception
     {
-        assertThat(filter.accepts(CLASS_NAME), equalTo(false));
+        descriptor.setExportedClassPackages(Collections.singleton("java.lang"));
+        descriptor.setExportedResourcePackages(Collections.singleton("META-INF"));
     }
 
     @Test
-    public void acceptsClassWhenClassExported() throws Exception
+    public void filtersClassWhenPackageNotExported() throws Exception
     {
-        descriptor.setExportedPrefixNames(CLASS_NAMES);
-        assertThat(filter.accepts(CLASS_NAME), equalTo(true));
+        assertThat(filter.exportsClass(java.io.Closeable.class.getName()), equalTo(false));
     }
 
     @Test
-    public void acceptsClassWhenPrefixExported() throws Exception
+    public void filtersClassWhenPackageNotExportedAndParentPackageIsExported() throws Exception
     {
-        descriptor.setExportedPrefixNames(PREFIX_NAMES);
-        assertThat(filter.accepts(CLASS_NAME), equalTo(true));
+        assertThat(filter.exportsClass(Annotation.class.getName()), equalTo(false));
     }
 
     @Test
-    public void filtersClassWhenClassBlocked() throws Exception
+    public void acceptsClassWhenPackageExported() throws Exception
     {
-        descriptor.setExportedPrefixNames(CLASS_NAMES);
-        descriptor.setBlockedPrefixNames(CLASS_NAMES);
-        assertThat(filter.accepts(CLASS_NAME), equalTo(false));
+        assertThat(filter.exportsClass(Object.class.getName()), equalTo(true));
     }
 
     @Test
-    public void filtersClassWhenPrefixBlocked() throws Exception
+    public void acceptsResourceWhenPackageExported() throws Exception
     {
-        descriptor.setExportedPrefixNames(PREFIX_NAMES);
-        descriptor.setBlockedPrefixNames(PREFIX_NAMES);
-        assertThat(filter.accepts(CLASS_NAME), equalTo(false));
+        assertThat(filter.exportsResource("/META-INF/schema.xsd"), equalTo(true));
     }
 
     @Test
-    public void acceptsClassWhenClassExportedAndPrefixBlocked() throws Exception
+    public void filtersResourceWhenPackageNotExported() throws Exception
     {
-        descriptor.setExportedPrefixNames(CLASS_NAMES);
-        descriptor.setBlockedPrefixNames(PREFIX_NAMES);
-        assertThat(filter.accepts(CLASS_NAME), equalTo(true));
+        assertThat(filter.exportsResource("/DOC/readme.txt"), equalTo(false));
+    }
+
+    @Test
+    public void filtersResourceWhenPackageNotExportedAndParentPackageIsExported() throws Exception
+    {
+        assertThat(filter.exportsResource("/META-INF/XML/sample.xml"), equalTo(false));
     }
 }

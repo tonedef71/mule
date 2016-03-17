@@ -7,6 +7,9 @@
 
 package org.mule.module.artifact.descriptor;
 
+import static org.mule.util.Preconditions.checkArgument;
+import org.mule.module.artifact.classloader.ClassLoaderLookupPolicy;
+
 import java.io.File;
 import java.util.Collections;
 import java.util.Set;
@@ -16,9 +19,10 @@ public class ArtifactDescriptor
 
     private String name;
     private File rootFolder;
-    private Set<String> loaderOverrides = Collections.emptySet();
-    private Set<String> exportedPrefixNames = Collections.emptySet();
-    private Set<String> blockedPrefixNames = Collections.emptySet();
+    //TODO(pablo.kraan): extract exported packages and resources into a new class
+    private Set<String> exportedClassPackages = Collections.emptySet();
+    private Set<String> exportedResourcePackages = Collections.emptySet();
+    private ClassLoaderLookupPolicy classLoaderLookupPolicy = ClassLoaderLookupPolicy.NULL_LOOKUP_POLICY;
 
     public String getName()
     {
@@ -45,44 +49,37 @@ public class ArtifactDescriptor
         this.rootFolder = rootFolder;
     }
 
-    public void setLoaderOverride(Set<String> loaderOverrides)
+    public void setExportedClassPackages(Set<String> exported)
     {
-        if (loaderOverrides == null)
-        {
-            throw new IllegalArgumentException("Loader overrides cannot be null");
-        }
-
-        this.loaderOverrides = Collections.unmodifiableSet(loaderOverrides);
-    }
-
-    public Set<String> getLoaderOverrides()
-    {
-        return loaderOverrides;
-    }
-
-    public void setExportedPrefixNames(Set<String> exported)
-    {
-        this.exportedPrefixNames = Collections.unmodifiableSet(exported);
+        this.exportedClassPackages = Collections.unmodifiableSet(exported);
     }
 
     /**
      * @return an immutable set of exported class prefix names
      */
-    public Set<String> getExportedPrefixNames()
+    public Set<String> getExportedClassPackages()
     {
-        return exportedPrefixNames;
+        return exportedClassPackages;
     }
 
-    public void setBlockedPrefixNames(Set<String> blocked)
+    public ClassLoaderLookupPolicy getClassLoaderLookupPolicy()
     {
-        this.blockedPrefixNames = Collections.unmodifiableSet(blocked);
+        return classLoaderLookupPolicy;
     }
 
-    /**
-     * @return an immutable set of blocked class prefix names
-     */
-    public Set<String> getBlockedPrefixNames()
+    public void setClassLoaderLookupPolicy(ClassLoaderLookupPolicy classLoaderLookupPolicy)
     {
-        return blockedPrefixNames;
+        checkArgument(classLoaderLookupPolicy != null, "Classloader lookup policy must be non null");
+        this.classLoaderLookupPolicy = classLoaderLookupPolicy;
+    }
+
+    public Set<String> getExportedResourcePackages()
+    {
+        return exportedResourcePackages;
+    }
+
+    public void setExportedResourcePackages(Set<String> exportedResourcePackages)
+    {
+        this.exportedResourcePackages = exportedResourcePackages;
     }
 }

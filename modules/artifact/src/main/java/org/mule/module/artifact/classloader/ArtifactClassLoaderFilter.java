@@ -9,8 +9,6 @@ package org.mule.module.artifact.classloader;
 
 import org.mule.module.artifact.descriptor.ArtifactDescriptor;
 
-import java.util.Set;
-
 /**
  * Filters classes and resources using a {@link ArtifactDescriptor} describing
  * exported/blocked names.
@@ -23,6 +21,8 @@ import java.util.Set;
 public class ArtifactClassLoaderFilter implements ClassLoaderFilter
 {
 
+    public static final char PACKAGE_SEPARATOR = '.';
+    public static final String EMPTY_PACKAGE = "";
     private final ArtifactDescriptor descriptor;
 
     public ArtifactClassLoaderFilter(ArtifactDescriptor descriptor)
@@ -31,41 +31,45 @@ public class ArtifactClassLoaderFilter implements ClassLoaderFilter
     }
 
     @Override
-    public boolean accepts(String name)
+    public boolean exportsClass(String className)
     {
-        return !isBlockedClass(name) && isExportedClass(name) || !isBlockedPrefix(name) && isExportedPrefix(name);
+        final String packageName = getPackageName(className);
+
+        return descriptor.getExportedClassPackages().contains(packageName);
     }
 
-    private boolean isBlockedPrefix(String name)
+    @Override
+    public boolean exportsResource(String name)
     {
-        return hasListedPrefix(name, descriptor.getBlockedPrefixNames());
+        final String resourcePackage = getResourceFolder(name);
+
+        return descriptor.getExportedResourcePackages().contains(resourcePackage);
     }
 
-    private boolean isBlockedClass(String name)
+    private String getResourceFolder(String resourceName)
     {
-        return descriptor.getBlockedPrefixNames().contains(name);
-    }
-
-    private boolean isExportedClass(String name)
-    {
-        return descriptor.getExportedPrefixNames().contains(name);
-    }
-
-    private boolean isExportedPrefix(String name)
-    {
-        return hasListedPrefix(name, descriptor.getExportedPrefixNames());
-    }
-
-    private boolean hasListedPrefix(String name, Set<String> classes)
-    {
-        for (String exported : classes)
+        if (resourceName == null)
         {
-            if (name.startsWith(exported))
-            {
-                return true;
-            }
+            return EMPTY_PACKAGE;
         }
+        else
+        {
+            //TODO(pablo.kraan): check how to export resources from the root of an isolated component
+            String pkgName = (resourceName.startsWith("/")) ? resourceName.substring(1) : resourceName;
+            pkgName = (pkgName.lastIndexOf('/') < 0) ? "" : pkgName.substring(0, pkgName.lastIndexOf('/'));
+            return pkgName;
+        }
+    }
 
-        return false;
+    private String getPackageName(String className)
+    {
+        if (className == null)
+        {
+            return EMPTY_PACKAGE;
+        }
+        else
+        {
+            return (className.lastIndexOf(PACKAGE_SEPARATOR) < 0) ? EMPTY_PACKAGE : className.substring(0, className.lastIndexOf('.'));
+        }
     }
 }

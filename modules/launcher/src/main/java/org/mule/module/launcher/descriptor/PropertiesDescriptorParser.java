@@ -7,16 +7,15 @@
 package org.mule.module.launcher.descriptor;
 
 import static org.mule.module.reboot.MuleContainerBootstrapUtils.getMuleAppDir;
+import org.mule.module.artifact.classloader.ClassLoaderLookupPolicy;
+import org.mule.module.artifact.classloader.ClassLoaderLookupPolicyParser;
 import org.mule.util.PropertiesUtils;
 import org.mule.util.StringUtils;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
-import java.util.Collections;
-import java.util.HashSet;
 import java.util.Properties;
-import java.util.Set;
 
 import org.apache.commons.lang.BooleanUtils;
 
@@ -29,6 +28,12 @@ public class PropertiesDescriptorParser implements DescriptorParser
     protected static final String PROPERTY_CONFIG_RESOURCES = "config.resources";
     protected static final String PROPERTY_REDEPLOYMENT_ENABLED = "redeployment.enabled";
     protected static final String PROPERTY_LOADER_OVERRIDE = "loader.override";
+    private final ClassLoaderLookupPolicyParser classLoaderLookupPolicyParser;
+
+    public PropertiesDescriptorParser(ClassLoaderLookupPolicyParser classLoaderLookupPolicyParser)
+    {
+        this.classLoaderLookupPolicyParser = classLoaderLookupPolicyParser;
+    }
 
     public ApplicationDescriptor parse(File descriptor, String applicationName) throws IOException
     {
@@ -59,14 +64,8 @@ public class PropertiesDescriptorParser implements DescriptorParser
         // supports true (case insensitive), yes, on as positive values
         d.setRedeploymentEnabled(BooleanUtils.toBoolean(p.getProperty(PROPERTY_REDEPLOYMENT_ENABLED, Boolean.TRUE.toString())));
 
-        final String overrideString = p.getProperty(PROPERTY_LOADER_OVERRIDE);
-        if (StringUtils.isNotBlank(overrideString))
-        {
-            Set<String> values = new HashSet<>();
-            final String[] overrides = overrideString.split(",");
-            Collections.addAll(values, overrides);
-            d.setLoaderOverride(values);
-        }
+        final ClassLoaderLookupPolicy classLoaderLookupPolicy = classLoaderLookupPolicyParser.parse(p.getProperty(PROPERTY_LOADER_OVERRIDE));
+        d.setClassLoaderLookupPolicy(classLoaderLookupPolicy);
 
         return d;
     }

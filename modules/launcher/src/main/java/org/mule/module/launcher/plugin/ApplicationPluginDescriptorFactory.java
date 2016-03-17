@@ -7,6 +7,8 @@
 
 package org.mule.module.launcher.plugin;
 
+import org.mule.module.artifact.classloader.ClassLoaderLookupPolicy;
+import org.mule.module.artifact.classloader.ClassLoaderLookupPolicyParser;
 import org.mule.module.artifact.descriptor.ArtifactDescriptorFactory;
 import org.mule.module.artifact.descriptor.ArtifactDescriptorCreateException;
 import org.mule.util.StringUtils;
@@ -30,6 +32,12 @@ public class ApplicationPluginDescriptorFactory implements ArtifactDescriptorFac
     public static final String PROPERTY_LOADER_OVERRIDE = "loader.override";
     public static final String PROPERTY_LOADER_EXPORTED = "loader.export";
     public static final String PLUGIN_PROPERTIES = "plugin.properties";
+    private final ClassLoaderLookupPolicyParser classLoaderLookupPolicyParser;
+
+    public ApplicationPluginDescriptorFactory(ClassLoaderLookupPolicyParser classLoaderLookupPolicyParser)
+    {
+        this.classLoaderLookupPolicyParser = classLoaderLookupPolicyParser;
+    }
 
     @Override
     public ApplicationPluginDescriptor create(File pluginFolder) throws ArtifactDescriptorCreateException
@@ -52,14 +60,8 @@ public class ApplicationPluginDescriptorFactory implements ArtifactDescriptorFac
                 throw new ArtifactDescriptorCreateException("Cannot read plugin.properties file", e);
             }
 
-            final String overrideString = props.getProperty(PROPERTY_LOADER_OVERRIDE);
-            if (StringUtils.isNotBlank(overrideString))
-            {
-                Set<String> values = new HashSet<>();
-                final String[] overrides = overrideString.split(",");
-                Collections.addAll(values, overrides);
-                descriptor.setLoaderOverride(values);
-            }
+            final ClassLoaderLookupPolicy classLoaderLookupPolicy = classLoaderLookupPolicyParser.parse(props.getProperty(PROPERTY_LOADER_OVERRIDE));
+            descriptor.setClassLoaderLookupPolicy(classLoaderLookupPolicy);
 
             String exportedClasses = props.getProperty(PROPERTY_LOADER_EXPORTED);
             if (StringUtils.isNotBlank(exportedClasses))
@@ -67,7 +69,7 @@ public class ApplicationPluginDescriptorFactory implements ArtifactDescriptorFac
                 Set<String> values = new HashSet<>();
                 final String[] exports = exportedClasses.split(",");
                 Collections.addAll(values, exports);
-                descriptor.setExportedPrefixNames(values);
+                descriptor.setExportedClassPackages(values);
             }
         }
 

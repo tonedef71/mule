@@ -10,12 +10,18 @@ package org.mule.module.launcher.plugin;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.core.Is.is;
+import static org.mockito.Matchers.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 import static org.mule.module.launcher.plugin.ApplicationPluginDescriptorFactory.PLUGIN_PROPERTIES;
 import static org.mule.module.launcher.plugin.ApplicationPluginDescriptorFactory.PROPERTY_LOADER_EXPORTED;
 import static org.mule.module.launcher.plugin.ApplicationPluginDescriptorFactory.PROPERTY_LOADER_OVERRIDE;
 import static org.mule.util.FileUtils.stringToFile;
+import org.mule.module.artifact.classloader.ClassLoaderLookupPolicy;
+import org.mule.module.artifact.classloader.ClassLoaderLookupPolicyParser;
 import org.mule.tck.junit4.AbstractMuleTestCase;
 import org.mule.util.FileUtils;
+import org.mule.util.StringUtils;
 
 import java.io.File;
 import java.io.IOException;
@@ -37,15 +43,13 @@ public class ApplicationPluginDescriptorFactoryTestCase extends AbstractMuleTest
     @Rule
     public TemporaryFolder pluginsFolder = new TemporaryFolder();
 
-    private ApplicationPluginDescriptorFactory descriptorFactory = new ApplicationPluginDescriptorFactory();
-
+    private final ClassLoaderLookupPolicyParser classLoaderLookupPolicyParser = mock(ClassLoaderLookupPolicyParser.class);
+    private ApplicationPluginDescriptorFactory descriptorFactory = new ApplicationPluginDescriptorFactory(classLoaderLookupPolicyParser);
 
     @Test
     public void parsesPluginWithNoDescriptor() throws Exception
     {
-
-        final File pluginFolder = new File(pluginsFolder.getRoot(), PLUGIN_NAME);
-        assertThat(pluginFolder.mkdir(), is(true));
+        final File pluginFolder = createPluginFolder();
 
         final ApplicationPluginDescriptor pluginDescriptor = descriptorFactory.create(pluginFolder);
 
@@ -55,28 +59,23 @@ public class ApplicationPluginDescriptorFactoryTestCase extends AbstractMuleTest
     @Test
     public void parsesLoaderOverrides() throws Exception
     {
+        final File pluginFolder = createPluginFolder();
 
-        final File pluginFolder = new File(pluginsFolder.getRoot(), PLUGIN_NAME);
-        assertThat(pluginFolder.mkdir(), is(true));
+        final String overrides = "org.foo, org.bar";
+        final ClassLoaderLookupPolicy classLoaderLookupPolicy = mock(ClassLoaderLookupPolicy.class);
+        when(classLoaderLookupPolicyParser.parse(overrides)).thenReturn(classLoaderLookupPolicy);
 
-        final Set<String> loaderOverrides = new HashSet<>();
-        loaderOverrides.add("org.foo");
-        loaderOverrides.add("org.bar");
-
-        new PluginPropertiesBuilder(pluginFolder).overriding(loaderOverrides).build();
-
+        new PluginPropertiesBuilder(pluginFolder).overriding(overrides).build();
 
         final ApplicationPluginDescriptor pluginDescriptor = descriptorFactory.create(pluginFolder);
 
-        new PluginDescriptorChecker(pluginFolder).overriding(loaderOverrides).assertPluginDescriptor(pluginDescriptor);
+        new PluginDescriptorChecker(pluginFolder).configuredWith(classLoaderLookupPolicy).assertPluginDescriptor(pluginDescriptor);
     }
 
     @Test
     public void parsesLoaderExport() throws Exception
     {
-
-        final File pluginFolder = new File(pluginsFolder.getRoot(), PLUGIN_NAME);
-        assertThat(pluginFolder.mkdir(), is(true));
+        final File pluginFolder = createPluginFolder();
 
         final Set<String> loaderExport = new HashSet<>();
         loaderExport.add("org.foo");
@@ -84,6 +83,7 @@ public class ApplicationPluginDescriptorFactoryTestCase extends AbstractMuleTest
 
         new PluginPropertiesBuilder(pluginFolder).exporting(loaderExport).build();
 
+        when(classLoaderLookupPolicyParser.parse(anyString())).thenReturn(ClassLoaderLookupPolicy.NULL_LOOKUP_POLICY);
 
         final ApplicationPluginDescriptor pluginDescriptor = descriptorFactory.create(pluginFolder);
 
@@ -93,9 +93,7 @@ public class ApplicationPluginDescriptorFactoryTestCase extends AbstractMuleTest
     @Test
     public void parsesLibraries() throws Exception
     {
-
-        final File pluginFolder = new File(pluginsFolder.getRoot(), PLUGIN_NAME);
-        assertThat(pluginFolder.mkdir(), is(true));
+        final File pluginFolder = createPluginFolder();
 
         final File pluginLibFolder = new File(pluginFolder, "lib");
         assertThat(pluginLibFolder.mkdir(), is(true));
@@ -107,6 +105,13 @@ public class ApplicationPluginDescriptorFactoryTestCase extends AbstractMuleTest
         final ApplicationPluginDescriptor pluginDescriptor = descriptorFactory.create(pluginFolder);
 
         new PluginDescriptorChecker(pluginFolder).containing(libraries).assertPluginDescriptor(pluginDescriptor);
+    }
+
+    private File createPluginFolder()
+    {
+        final File pluginFolder = new File(pluginsFolder.getRoot(), PLUGIN_NAME);
+        assertThat(pluginFolder.mkdir(), is(true));
+        return pluginFolder;
     }
 
     private File createDummyJarFile(File pluginLibFolder, String child) throws IOException
@@ -121,19 +126,12 @@ public class ApplicationPluginDescriptorFactoryTestCase extends AbstractMuleTest
 
         private final File pluginFolder;
         private URL[] runtimeLibs = new URL[0];;
-        private Set<String> blockedPrefixes = Collections.emptySet();
         private Set<String> exportedPrefixes = Collections.emptySet();
-        private Set<String> overriddenPrefixes = Collections.emptySet();
+        private ClassLoaderLookupPolicy classLoaderLookupPolicy = ClassLoaderLookupPolicy.NULL_LOOKUP_POLICY;
 
         public PluginDescriptorChecker(File pluginFolder)
         {
             this.pluginFolder = pluginFolder;
-        }
-
-        public PluginDescriptorChecker overriding(Set<String> overrides)
-        {
-             overriddenPrefixes = overrides;
-            return this;
         }
 
         public PluginDescriptorChecker exporting(Set<String> exports)
@@ -142,16 +140,15 @@ public class ApplicationPluginDescriptorFactoryTestCase extends AbstractMuleTest
             return this;
         }
 
-
-        public PluginDescriptorChecker blocking(Set<String> blocks)
-        {
-            overriddenPrefixes = blocks;
-            return this;
-        }
-
         public PluginDescriptorChecker containing(URL[] libraries)
         {
             runtimeLibs = libraries;
+            return this;
+        }
+
+        public PluginDescriptorChecker configuredWith(ClassLoaderLookupPolicy classLoaderLookupPolicy)
+        {
+            this.classLoaderLookupPolicy = classLoaderLookupPolicy;
             return this;
         }
 
@@ -168,11 +165,9 @@ public class ApplicationPluginDescriptorFactoryTestCase extends AbstractMuleTest
             }
 
             assertThat(pluginDescriptor.getRuntimeLibs(), equalTo(runtimeLibs));
-            blockedPrefixes = Collections.emptySet();
-            assertThat(pluginDescriptor.getBlockedPrefixNames(), equalTo(blockedPrefixes));
-            assertThat(pluginDescriptor.getExportedPrefixNames(), equalTo(exportedPrefixes));
-            assertThat(pluginDescriptor.getLoaderOverrides(), equalTo(overriddenPrefixes));
+            assertThat(pluginDescriptor.getExportedClassPackages(), equalTo(exportedPrefixes));
             assertThat(pluginDescriptor.getRootFolder(), equalTo(pluginFolder));
+            assertThat(pluginDescriptor.getClassLoaderLookupPolicy(), is(classLoaderLookupPolicy));
         }
     }
 
@@ -180,7 +175,7 @@ public class ApplicationPluginDescriptorFactoryTestCase extends AbstractMuleTest
     {
 
         private final File pluginFolder;
-        private Set<String> overrides = new HashSet<>();
+        private String overrides;
         private Set<String> exporting = new HashSet<>();
 
         public PluginPropertiesBuilder(File pluginFolder)
@@ -188,7 +183,7 @@ public class ApplicationPluginDescriptorFactoryTestCase extends AbstractMuleTest
             this.pluginFolder = pluginFolder;
         }
 
-        public PluginPropertiesBuilder overriding(Set<String> overrides)
+        public PluginPropertiesBuilder overriding(String overrides)
         {
             this.overrides = overrides;
 
@@ -210,9 +205,9 @@ public class ApplicationPluginDescriptorFactoryTestCase extends AbstractMuleTest
                 throw new IllegalStateException(String.format("File '%s' already exists", pluginProperties.getAbsolutePath()));
             }
 
-            if (!overrides.isEmpty())
+            if (!StringUtils.isEmpty(overrides))
             {
-                final String descriptorProperty = generatePackageListProperty(this.overrides, PROPERTY_LOADER_OVERRIDE);
+                final String descriptorProperty = generateDescriptorProperty(PROPERTY_LOADER_OVERRIDE, overrides);
 
                 stringToFile(pluginProperties.getAbsolutePath(), descriptorProperty, true);
             }
@@ -225,6 +220,13 @@ public class ApplicationPluginDescriptorFactoryTestCase extends AbstractMuleTest
             }
 
             return pluginProperties;
+        }
+
+        private String generateDescriptorProperty(String propertyName, String propertyValue)
+        {
+            StringBuilder builder = new StringBuilder(propertyName).append("=").append(propertyValue);
+
+            return builder.toString();
         }
 
         private String generatePackageListProperty(Set<String> packages, String propertyName)

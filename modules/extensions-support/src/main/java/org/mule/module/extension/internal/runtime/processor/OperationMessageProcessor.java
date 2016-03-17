@@ -12,6 +12,7 @@ import static org.mule.api.lifecycle.LifecycleUtils.startIfNeeded;
 import static org.mule.api.lifecycle.LifecycleUtils.stopIfNeeded;
 import static org.mule.config.i18n.MessageFactory.createStaticMessage;
 import static org.mule.module.extension.internal.util.IntrospectionUtils.isVoid;
+import static org.mule.module.extension.internal.util.MuleExtensionUtils.getInitialiserEvent;
 import org.mule.api.MessagingException;
 import org.mule.api.MuleContext;
 import org.mule.api.MuleEvent;
@@ -19,21 +20,34 @@ import org.mule.api.MuleException;
 import org.mule.api.context.MuleContextAware;
 import org.mule.api.lifecycle.InitialisationException;
 import org.mule.api.lifecycle.Lifecycle;
+import org.mule.api.metadata.FailureType;
+import org.mule.api.metadata.MetadataAware;
+import org.mule.api.metadata.MetadataKey;
+import org.mule.api.metadata.descriptor.OperationMetadataDescriptor;
+import org.mule.api.metadata.Result;
 import org.mule.api.processor.MessageProcessor;
 import org.mule.extension.api.ExtensionManager;
 import org.mule.extension.api.introspection.OperationModel;
 import org.mule.extension.api.introspection.RuntimeExtensionModel;
 import org.mule.extension.api.introspection.RuntimeOperationModel;
+import org.mule.extension.api.metadata.MetadataContext;
+import org.mule.extension.api.metadata.MetadataResolvingException;
 import org.mule.extension.api.runtime.ConfigurationInstance;
 import org.mule.extension.api.runtime.OperationContext;
 import org.mule.extension.api.runtime.OperationExecutor;
 import org.mule.internal.connection.ConnectionManagerAdapter;
+import org.mule.metadata.api.model.MetadataType;
 import org.mule.module.extension.internal.runtime.DefaultExecutionMediator;
 import org.mule.module.extension.internal.runtime.DefaultOperationContext;
 import org.mule.module.extension.internal.runtime.ExecutionMediator;
 import org.mule.module.extension.internal.runtime.OperationContextAdapter;
+import org.mule.module.extension.internal.runtime.config.DynamicConfigurationProvider;
+import org.mule.module.extension.internal.runtime.metadata.DefaultMetadataContext;
+import org.mule.module.extension.internal.runtime.metadata.MetadataMediator;
 import org.mule.module.extension.internal.runtime.resolver.ResolverSet;
 import org.mule.util.StringUtils;
+
+import java.util.List;
 
 import javax.inject.Inject;
 
@@ -56,7 +70,7 @@ import org.slf4j.LoggerFactory;
  *
  * @since 3.7.0
  */
-public final class OperationMessageProcessor implements MessageProcessor, MuleContextAware, Lifecycle
+public final class OperationMessageProcessor implements MessageProcessor, MuleContextAware, Lifecycle, MetadataAware
 {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(OperationMessageProcessor.class);
@@ -72,6 +86,7 @@ public final class OperationMessageProcessor implements MessageProcessor, MuleCo
     private ReturnDelegate returnDelegate;
     private MuleContext muleContext;
     private OperationExecutor operationExecutor;
+    private MetadataMediator metadataMediator;
 
     @Inject
     private ConnectionManagerAdapter connectionManager;
@@ -89,6 +104,7 @@ public final class OperationMessageProcessor implements MessageProcessor, MuleCo
         this.resolverSet = resolverSet;
         this.extensionManager = extensionManager;
         this.target = target;
+        this.metadataMediator = new MetadataMediator(operationModel);
     }
 
     @Override
@@ -165,6 +181,49 @@ public final class OperationMessageProcessor implements MessageProcessor, MuleCo
     public void setMuleContext(MuleContext muleContext)
     {
         this.muleContext = muleContext;
+    }
+
+    @Override
+    public Result<List<MetadataKey>> getMetadataKeys() throws MetadataResolvingException
+    {
+        return metadataMediator.getMetadataKeys(getMetadataContext());
+    }
+
+    @Override
+    public Result<MetadataType> getContentMetadata(MetadataKey key) throws MetadataResolvingException
+    {
+        return metadataMediator.getContentMetadata(getMetadataContext(), key);
+    }
+
+    @Override
+    public Result<MetadataType> getOutputMetadata(MetadataKey key) throws MetadataResolvingException
+    {
+        return metadataMediator.getOutputMetadata(getMetadataContext(), key);
+    }
+
+    @Override
+    public Result<OperationMetadataDescriptor> getMetadata() throws MetadataResolvingException
+    {
+        return metadataMediator.getMetadata();
+    }
+
+    @Override
+    public Result<OperationMetadataDescriptor> getMetadata( MetadataKey key) throws MetadataResolvingException
+    {
+        return metadataMediator.getMetadata(getMetadataContext(), key);
+    }
+
+    private MetadataContext getMetadataContext() throws MetadataResolvingException
+    {
+        //FIXME bug when the configuration is accesed by the extensionModel, but the implicit config is dynamic
+        if (!StringUtils.isBlank(configurationProviderName) &&
+            muleContext.getRegistry().get(configurationProviderName) instanceof DynamicConfigurationProvider)
+        {
+            throw new MetadataResolvingException("Configuration used for Metadata fetch cannot be dynamic", FailureType.INVALID_CONFIGURATION);
+        }
+
+        ConfigurationInstance<Object> configuration = getConfiguration(getInitialiserEvent(muleContext));
+        return new DefaultMetadataContext(configuration, connectionManager);
     }
 
 }

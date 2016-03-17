@@ -24,6 +24,11 @@ import org.mule.api.MuleEvent;
 import org.mule.api.MuleException;
 import org.mule.api.MuleMessage;
 import org.mule.api.connection.ConnectionException;
+import org.mule.api.metadata.MetadataKey;
+import org.mule.api.metadata.MetadataManager;
+import org.mule.api.metadata.MuleMetadataManager;
+import org.mule.api.metadata.ProcessorId;
+import org.mule.api.metadata.Result;
 import org.mule.extension.api.ExtensionManager;
 import org.mule.functional.junit4.ExtensionFunctionalTestCase;
 import org.mule.functional.junit4.FlowRunner;
@@ -105,6 +110,17 @@ public class OperationExecutionTestCase extends ExtensionFunctionalTestCase
     public void operationWithFixedParameter() throws Exception
     {
         assertThat(GUSTAVO_FRING, is(runFlow("getFixedEnemy").getMessage().getPayload()));
+    }
+
+    @Test
+    public void dynamicContentWithKey() throws Exception
+    {
+        MetadataManager metadataManager = muleContext.getRegistry().lookupObject(MuleMetadataManager.MANAGER_REGISTRY_ID);
+        Result<List<MetadataKey>> dynamicContentWithKey = metadataManager.getMetadataKeys(new ProcessorId("dynamicContentWithKey", "0"));
+
+        assert dynamicContentWithKey.isSucess();
+
+        runFlow("dynamicContentWithKey");
     }
 
     @Test

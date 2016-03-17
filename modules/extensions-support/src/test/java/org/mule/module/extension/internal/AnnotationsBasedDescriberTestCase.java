@@ -462,6 +462,7 @@ public class AnnotationsBasedDescriberTestCase extends AbstractAnnotationsBasedD
 
         operation = getOperation(declaration, IGNORED_OPERATION);
         assertThat(operation, is(nullValue()));
+
     }
 
     private void assertTestModuleConnectionProviders(Declaration declaration) throws Exception

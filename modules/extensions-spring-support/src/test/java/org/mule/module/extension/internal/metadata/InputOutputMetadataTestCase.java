@@ -44,7 +44,7 @@ public class InputOutputMetadataTestCase extends MetadataManagerTestCase
     @Test
     public void getContentMetadataWithKey() throws Exception
     {
-        processorId = new ProcessorId(CONTENT_METADATA_WITH_KEY_PARAM, 0);
+        processorId = new ProcessorId(CONTENT_METADATA_WITH_KEY_PARAM, "0");
 
         final Result<MetadataType> contentMetadata = metadataManager.getContentMetadata(processorId, personKey);
         final Result<MetadataType> outputMetadata = metadataManager.getOutputMetadata(processorId, personKey);

@@ -7,6 +7,7 @@
 package org.mule.module.extension.internal.metadata;
 
 import org.mule.api.metadata.FailureType;
+import org.mule.api.metadata.InvalidExecutableIdException;
 import org.mule.api.metadata.ProcessorId;
 import org.mule.api.metadata.Result;
 import org.mule.api.metadata.descriptor.OperationMetadataDescriptor;
@@ -17,8 +18,11 @@ import org.junit.Test;
 
 public class MetadataNegativeTestCase extends MetadataExtensionFunctionalTestCase
 {
+
     private static final String FAIL_WITH_RESOLVING_EXCEPTION = "failWithResolvingException";
     private static final String FAIL_WITH_RUNTIME_EXCEPTION = "failWithRuntimeException";
+    private static final String NON_EXISTING_FLOW = "nonExistingFlow";
+    private static final String LOGGER_FLOW = "loggerFlow";
 
     @Test
     public void getContentMetadataWhenNoContentParam() throws Exception
@@ -45,6 +49,33 @@ public class MetadataNegativeTestCase extends MetadataExtensionFunctionalTestCas
         Result<OperationMetadataDescriptor> metadata = metadataManager.getOperationMetadata(processorId, personKey);
 
         assertFailure(metadata, "", FailureType.UNKNOWN, RuntimeException.class.getName());
+    }
+
+    @Test
+    public void flowDoesNotExist() throws Exception
+    {
+        processorId = new ProcessorId(NON_EXISTING_FLOW, FIRST_PROCESSOR_INDEX);
+        Result<OperationMetadataDescriptor> metadata = metadataManager.getOperationMetadata(processorId, personKey);
+
+        assertFailure(metadata, "Processor doesn't exist ", FailureType.UNKNOWN, InvalidExecutableIdException.class.getName());
+    }
+
+    @Test
+    public void processorDoesNotExist() throws Exception
+    {
+        processorId = new ProcessorId(FAIL_WITH_RUNTIME_EXCEPTION, "10");
+        Result<OperationMetadataDescriptor> metadata = metadataManager.getOperationMetadata(processorId, personKey);
+
+        assertFailure(metadata, "Processor doesn't exist", FailureType.UNKNOWN, IndexOutOfBoundsException.class.getName());
+    }
+
+    @Test
+    public void processorIsNotMetadataAware() throws Exception
+    {
+        processorId = new ProcessorId(LOGGER_FLOW, FIRST_PROCESSOR_INDEX);
+        Result<OperationMetadataDescriptor> metadata = metadataManager.getOperationMetadata(processorId, personKey);
+
+        assertFailure(metadata, "not MetadataAware", FailureType.UNKNOWN, ClassCastException.class.getName());
     }
 
 }

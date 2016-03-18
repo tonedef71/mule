@@ -155,7 +155,7 @@ public class MetadataManagerTestCase
         assertThat(contentType.isSucess(), is(false));
         assertThat(outputType.isSucess(), is(false));
 
-        assertThat(outputType.getFailureType(), is(FailureType.RESOURCE_UNAVAILABLE));
+        assertThat(outputType.getFailureType().getName(), is(FailureType.RESOURCE_UNAVAILABLE.getName()));
     }
 
     private void verifyFoundMessageProcessor() throws MuleException

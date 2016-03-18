@@ -21,13 +21,13 @@ public class MuleMetadataManager implements MetadataManager, MuleContextAware
 {
 
     public static final String MANAGER_REGISTRY_ID = "core.metadata.manager.1";
-    public static final String EXCEPTION_RESOLVING_OPERATION_METADATA = "An exception occurred while resolving Operation %s metadata";
-    private static final String OPERATION_NOT_METADATA_AWARE = "Operation is not MetadataAware, no information available";
-    public static final String EXCEPTION_RESOLVING_METADATA_KEYS = "An exception occurred while resolving Operation MetadataKeys";
-    public static final String EXCEPTION_RESOLVING_CONTENT_METADATA = "An exception occurred while resolving Content metadata";
-    public static final String EXCEPTION_RESOLVING_OUTPUT_METADATA = "An exception occurred while resolving Output metadata";
-    public static final String MESSAGE_SOURCE_NOT_FOUND = "Flow doesn't contain a message source";
-    public static final String MESSAGE_PROCESSOR_NOT_FOUND = "Processor doesn't exist in the given index [%s]";
+    private static final String EXCEPTION_RESOLVING_OPERATION_METADATA = "An exception occurred while resolving Operation %s metadata";
+    private static final String PROCESSOR_NOT_METADATA_AWARE = "Operation is not MetadataAware, no information available";
+    private static final String EXCEPTION_RESOLVING_METADATA_KEYS = "An exception occurred while resolving Operation MetadataKeys";
+    private static final String EXCEPTION_RESOLVING_CONTENT_METADATA = "An exception occurred while resolving Content metadata";
+    private static final String EXCEPTION_RESOLVING_OUTPUT_METADATA = "An exception occurred while resolving Output metadata";
+    private static final String SOURCE_NOT_FOUND = "Flow doesn't contain a message source";
+    private static final String PROCESSOR_NOT_FOUND = "Processor doesn't exist in the given index [%s]";
 
     private MuleContext muleContext;
 
@@ -76,6 +76,10 @@ public class MuleMetadataManager implements MetadataManager, MuleContextAware
         {
             return metadataSupplier.get(findMetadataAwareExecutable(processId));
         }
+        catch (InvalidExecutableIdException e)
+        {
+            return ResultFactory.failure(null, e.getMessage(), e);
+        }
         catch (Exception e)
         {
             return ResultFactory.failure(null, failureMessage, e);
@@ -84,10 +88,11 @@ public class MuleMetadataManager implements MetadataManager, MuleContextAware
 
     private MetadataAware findMetadataAwareExecutable(ProcessId processId) throws InvalidExecutableIdException
     {
+        //FIXME MULE-9496 : Use flow paths to obtain Processors
         Flow flow = (Flow) muleContext.getRegistry().lookupFlowConstruct(processId.getFlowName());
         if (flow == null)
         {
-            throw new InvalidExecutableIdException(String.format(MESSAGE_PROCESSOR_NOT_FOUND, processId.getExecutablePath()));
+            throw new InvalidExecutableIdException(String.format(PROCESSOR_NOT_FOUND, processId.getExecutablePath()));
         }
         try
         {
@@ -99,7 +104,7 @@ public class MuleMetadataManager implements MetadataManager, MuleContextAware
                 }
                 catch (IndexOutOfBoundsException | NumberFormatException e)
                 {
-                    throw new InvalidExecutableIdException(String.format(MESSAGE_PROCESSOR_NOT_FOUND, processId.getExecutablePath()), e);
+                    throw new InvalidExecutableIdException(String.format(PROCESSOR_NOT_FOUND, processId.getExecutablePath()), e);
                 }
             }
             else
@@ -107,14 +112,14 @@ public class MuleMetadataManager implements MetadataManager, MuleContextAware
                 final MessageSource messageSource = flow.getMessageSource();
                 if (messageSource == null)
                 {
-                    throw new InvalidExecutableIdException(MESSAGE_SOURCE_NOT_FOUND);
+                    throw new InvalidExecutableIdException(SOURCE_NOT_FOUND);
                 }
                 return (MetadataAware) messageSource;
             }
         }
         catch (ClassCastException e)
         {
-            throw new InvalidExecutableIdException(OPERATION_NOT_METADATA_AWARE, e);
+            throw new InvalidExecutableIdException(PROCESSOR_NOT_METADATA_AWARE, e);
         }
     }
 

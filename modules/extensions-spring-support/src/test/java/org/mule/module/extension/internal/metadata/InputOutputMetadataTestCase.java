@@ -21,6 +21,7 @@ import org.junit.Test;
 
 public class InputOutputMetadataTestCase extends MetadataExtensionFunctionalTestCase
 {
+
     @Test
     public void getMetadataKeysWithKeyParam() throws Exception
     {

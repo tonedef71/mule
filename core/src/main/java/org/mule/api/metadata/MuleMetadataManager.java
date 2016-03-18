@@ -16,7 +16,6 @@ import org.mule.metadata.api.model.MetadataType;
 import org.mule.util.metadata.ResultFactory;
 
 import java.util.List;
-import java.util.Optional;
 
 public class MuleMetadataManager implements MetadataManager, MuleContextAware
 {
@@ -33,35 +32,35 @@ public class MuleMetadataManager implements MetadataManager, MuleContextAware
     private MuleContext muleContext;
 
     @Override
-    public Result<List<MetadataKey>> getMetadataKeys(ExecutableId executableId)
+    public Result<List<MetadataKey>> getMetadataKeys(ProcessId processId)
     {
-        return exceptionHandledMetadataFetch(executableId, MetadataAware::getMetadataKeys, EXCEPTION_RESOLVING_METADATA_KEYS);
+        return exceptionHandledMetadataFetch(processId, MetadataAware::getMetadataKeys, EXCEPTION_RESOLVING_METADATA_KEYS);
     }
 
     @Override
-    public Result<MetadataType> getContentMetadata(ExecutableId executableId, MetadataKey key)
+    public Result<MetadataType> getContentMetadata(ProcessId processId, MetadataKey key)
     {
-        return exceptionHandledMetadataFetch(executableId, processor -> processor.getContentMetadata(key), EXCEPTION_RESOLVING_CONTENT_METADATA);
+        return exceptionHandledMetadataFetch(processId, processor -> processor.getContentMetadata(key), EXCEPTION_RESOLVING_CONTENT_METADATA);
     }
 
     @Override
-    public Result<MetadataType> getOutputMetadata(ExecutableId executableId, MetadataKey key)
+    public Result<MetadataType> getOutputMetadata(ProcessId processId, MetadataKey key)
     {
-        return exceptionHandledMetadataFetch(executableId, processor -> processor.getOutputMetadata(key), EXCEPTION_RESOLVING_OUTPUT_METADATA);
+        return exceptionHandledMetadataFetch(processId, processor -> processor.getOutputMetadata(key), EXCEPTION_RESOLVING_OUTPUT_METADATA);
     }
 
     @Override
-    public Result<OperationMetadataDescriptor> getOperationMetadata(ExecutableId executableId, MetadataKey key)
+    public Result<OperationMetadataDescriptor> getOperationMetadata(ProcessId processId, MetadataKey key)
     {
-        return exceptionHandledMetadataFetch(executableId, processor -> processor.getMetadata(key),
-                                             String.format(EXCEPTION_RESOLVING_OPERATION_METADATA, executableId));
+        return exceptionHandledMetadataFetch(processId, processor -> processor.getMetadata(key),
+                                             String.format(EXCEPTION_RESOLVING_OPERATION_METADATA, processId));
     }
 
     @Override
-    public Result<OperationMetadataDescriptor> getOperationMetadata(ExecutableId executableId)
+    public Result<OperationMetadataDescriptor> getOperationMetadata(ProcessId processId)
     {
-        return exceptionHandledMetadataFetch(executableId, MetadataAware::getMetadata,
-                                             String.format(EXCEPTION_RESOLVING_OPERATION_METADATA, executableId));
+        return exceptionHandledMetadataFetch(processId, MetadataAware::getMetadata,
+                                             String.format(EXCEPTION_RESOLVING_OPERATION_METADATA, processId));
     }
 
     @Override
@@ -71,36 +70,36 @@ public class MuleMetadataManager implements MetadataManager, MuleContextAware
     }
 
 
-    private <T> Result<T> exceptionHandledMetadataFetch(ExecutableId executableId, MetadataDelegate<T> metadataSupplier, String failureMessage)
+    private <T> Result<T> exceptionHandledMetadataFetch(ProcessId processId, MetadataDelegate<T> metadataSupplier, String failureMessage)
     {
         try
         {
-            return metadataSupplier.get(findMetadataAwareExecutable(executableId));
+            return metadataSupplier.get(findMetadataAwareExecutable(processId));
         }
         catch (Exception e)
         {
-            return ResultFactory.failure(Optional.empty(), failureMessage, e);
+            return ResultFactory.failure(null, failureMessage, e);
         }
     }
 
-    private MetadataAware findMetadataAwareExecutable(ExecutableId executableId) throws InvalidExecutableIdException
+    private MetadataAware findMetadataAwareExecutable(ProcessId processId) throws InvalidExecutableIdException
     {
-        Flow flow = (Flow) muleContext.getRegistry().lookupFlowConstruct(executableId.getFlowName());
+        Flow flow = (Flow) muleContext.getRegistry().lookupFlowConstruct(processId.getFlowName());
         if (flow == null)
         {
-            throw new InvalidExecutableIdException(String.format(MESSAGE_PROCESSOR_NOT_FOUND, executableId.getExecutablePath()));
+            throw new InvalidExecutableIdException(String.format(MESSAGE_PROCESSOR_NOT_FOUND, processId.getExecutablePath()));
         }
         try
         {
-            if (!executableId.getExecutablePath().equals("-1"))
+            if (!processId.getExecutablePath().equals("-1"))
             {
                 try
                 {
-                    return ((MetadataAware) flow.getMessageProcessors().get(Integer.parseInt(executableId.getExecutablePath())));
+                    return ((MetadataAware) flow.getMessageProcessors().get(Integer.parseInt(processId.getExecutablePath())));
                 }
                 catch (IndexOutOfBoundsException | NumberFormatException e)
                 {
-                    throw new InvalidExecutableIdException(String.format(MESSAGE_PROCESSOR_NOT_FOUND, executableId.getExecutablePath()), e);
+                    throw new InvalidExecutableIdException(String.format(MESSAGE_PROCESSOR_NOT_FOUND, processId.getExecutablePath()), e);
                 }
             }
             else

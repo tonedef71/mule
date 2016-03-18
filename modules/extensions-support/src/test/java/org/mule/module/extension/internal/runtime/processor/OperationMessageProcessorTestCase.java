@@ -153,7 +153,7 @@ public class OperationMessageProcessorTestCase extends AbstractMuleContextTestCa
         when(operationModel.getExceptionEnricherFactory()).thenReturn(Optional.of(exceptionEnricherFactory));
         when(exceptionEnricherFactory.createEnricher()).thenReturn(new NullExceptionEnricher());
 
-        when(operationModel.getMetadataResolverFactory()).thenReturn(Optional.of(metadataResolverFactory));
+        when(operationModel.getMetadataResolverFactory()).thenReturn(metadataResolverFactory);
         when(metadataResolverFactory.getResolver()).thenReturn(new NoConfigMetadataResolver());
 
         when(successResult.isSucess()).thenReturn(true);

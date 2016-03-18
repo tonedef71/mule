@@ -6,16 +6,16 @@
  */
 package org.mule.module.extension.internal.runtime.metadata;
 
-import static java.util.Optional.empty;
-import static org.mule.api.metadata.FailureType.NO_DYNAMIC_KEY_AVAILABLE;
 import static org.mule.api.metadata.FailureType.NO_DYNAMIC_TYPE_AVAILABLE;
-import org.mule.api.metadata.FailureType;
 import org.mule.api.metadata.MetadataKey;
 import org.mule.api.metadata.Result;
 import org.mule.api.metadata.descriptor.ImmutableOperationMetadataDescriptor;
 import org.mule.api.metadata.descriptor.ImmutableParameterMetadataDescriptor;
 import org.mule.api.metadata.descriptor.OperationMetadataDescriptor;
 import org.mule.api.metadata.descriptor.ParameterMetadataDescriptor;
+import org.mule.api.temporary.MuleMessage;
+import org.mule.extension.api.annotation.param.metadata.Content;
+import org.mule.extension.api.annotation.param.metadata.MetadataKeyParam;
 import org.mule.extension.api.introspection.OperationModel;
 import org.mule.extension.api.introspection.ParameterModel;
 import org.mule.extension.api.introspection.metadata.MetadataResolverFactory;
@@ -32,12 +32,16 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 public class MetadataMediator
 {
 
     public static final String RETURN_PARAM_NAME = "output";
+    public static final String MESSAGE_ATTRIBUTES_NAME = "messageAttributes";
+
+    private static final String NO_CONTENT_PARAMETER_FOUND = "No @Content parameter found";
+    private static final String NO_DYNAMIC_TYPE_AVAILABLE_DEFAULTING_TO_JAVA_TYPE = "No Dynamic Type available, defaulting to Java type";
+
     private final OperationModel operationModel;
 
     public MetadataMediator(OperationModel operationModel)
@@ -46,54 +50,67 @@ public class MetadataMediator
     }
 
     /**
+     *  Resolves the list of types for the current Operation, representing them
+     *  as a list of {@link MetadataKey}.
      *
-     * @param context
-     * @return
+     *  If no {@link MetadataKeyParam} is present in the operation, then a {@link NullMetadataKey} is
+     *  returned. Otherwise, the {@link MetadataResolver#getMetadataKeys} associated with the current Operation will
+     *  be invoked to obtain the keys
+     *
+     * @param context current {@link MetadataContext} that will be used by the {@link MetadataResolver}
+     * @return  Successful {@link Result} if the keys are obtained without errors
+     *          Failure {@link Result} when no Dynamic keys are a available or the retrieval fails for any reason
      */
     public Result<List<MetadataKey>> getMetadataKeys(MetadataContext context)
     {
+        if (!operationModel.getMetadataKeyParameter().isPresent())
+        {
+            return ResultFactory.success(Collections.singletonList(new NullMetadataKey()));
+        }
+
         try
         {
-            if (!operationModel.getMetadataKeyParameter().isPresent())
-            {
-                return ResultFactory.success(Collections.singletonList(new NullMetadataKey()));
-            }
-
-            Optional<MetadataResolverFactory> resolverFactory = operationModel.getMetadataResolverFactory();
-            if (!resolverFactory.isPresent())
-            {
-                return ResultFactory.failure(empty(), "No Dynamic Keys available", NO_DYNAMIC_KEY_AVAILABLE, empty());
-            }
-
-            return ResultFactory.success(resolverFactory.get().getResolver().getMetadataKeys(context));
+            return ResultFactory.success(operationModel.getMetadataResolverFactory().getResolver().getMetadataKeys(context));
         }
         catch (Exception e)
         {
-            return ResultFactory.failure(empty(), e.getMessage(), e);
+            return ResultFactory.failure(null, e.getMessage(), e);
         }
     }
 
     /**
+     *  Resolves the {@link OperationMetadataDescriptor} for the current operation using
+     *  only the Static Java types of the Operation parameters, attributes and output.
      *
-     * @return
+     * @return  An {@link OperationMetadataDescriptor} with the Static Metadata representation
+     *          of the Operation.
      */
     public Result<OperationMetadataDescriptor> getMetadata()
     {
-        List<ParameterMetadataDescriptor> paramDescriptors = new ArrayList<>(operationModel.getParameterModels().size());
-        paramDescriptors.addAll(operationModel.getParameterModels().stream()
-                                        .map(model -> new ImmutableParameterMetadataDescriptor(model.getName(), model.getType(), false))
-                                        .collect(Collectors.toList()));
-
+        List<ParameterMetadataDescriptor> paramDescriptors = getStaticParameterDescriptors();
         ParameterMetadataDescriptor outputDescriptor = new ImmutableParameterMetadataDescriptor(RETURN_PARAM_NAME, operationModel.getReturnType(), false);
+        ParameterMetadataDescriptor attributesDescriptor = getAttributesMetadataDescriptor();
 
-        return ResultFactory.success(new ImmutableOperationMetadataDescriptor(operationModel.getName(), paramDescriptors, outputDescriptor));
+        return ResultFactory.success(new ImmutableOperationMetadataDescriptor(operationModel.getName(), paramDescriptors, outputDescriptor, attributesDescriptor));
     }
 
     /**
+     *  Resolves the {@link OperationMetadataDescriptor} for the current operation using
+     *  Static and Dynamic resolving of the Operation parameters, attributes and output.
      *
-     * @param context
-     * @param key
-     * @return
+     *  If {@link Content} or Output of the operation have a {@link MetadataResolver} associated
+     *  that can be used to resolve the Dynamic MetadataTypes, then the {@link OperationMetadataDescriptor}
+     *  will contain those Dynamic types instead of the Static Java type declaration.
+     *
+     *  When neither {@link Content} nor Output have Dynamic types, then invoking this method is the
+     *  same as invoking {@link this#getMetadata()}
+     *
+     * @param context current {@link MetadataContext} that will be used by the {@link MetadataResolver}
+     * @param key {@link MetadataKey} of the type which's structure has to be resolved,
+     *            used both for input and ouput types
+     *
+     * @return  Successful {@link Result} if the keys are obtained without errors
+     *          Failure {@link Result} when no Dynamic keys are a available or the retrieval fails for any reason
      */
     public Result<OperationMetadataDescriptor> getMetadata(MetadataContext context, MetadataKey key)
     {
@@ -102,95 +119,105 @@ public class MetadataMediator
             return getMetadata();
         }
 
-        Result<List<ParameterMetadataDescriptor>> paramDescriptors = getParameterDescriptors(context, key);
+        Result<List<ParameterMetadataDescriptor>> paramDescriptors = getDynamicParameterDescriptors(context, key);
         Result<ParameterMetadataDescriptor> outputDescriptor = getOutputMetadataDescriptor(context, key);
+        ImmutableParameterMetadataDescriptor attributesDescriptor = getAttributesMetadataDescriptor();
 
-        OperationMetadataDescriptor operationDescriptor = new ImmutableOperationMetadataDescriptor(operationModel.getName(), paramDescriptors.get(),
-                                                                                                   outputDescriptor.get());
-        if (paramDescriptors.isSucess() && outputDescriptor.isSucess())
-        {
-            return ResultFactory.success(operationDescriptor);
-        }
+        OperationMetadataDescriptor operationDescriptor = new ImmutableOperationMetadataDescriptor(operationModel.getName(),
+                                                                                                   paramDescriptors.get(),
+                                                                                                   outputDescriptor.get(),
+                                                                                                   attributesDescriptor);
 
-        String msg = paramDescriptors.isSucess() ? "" : paramDescriptors.getMessage();
-        msg += outputDescriptor.isSucess() ? "" : "\n\n" + outputDescriptor.getMessage();
-
-        return ResultFactory.failure(Optional.of(operationDescriptor), msg, FailureType.UNKNOWN, empty());
+        return ResultFactory.mergeResults(operationDescriptor, paramDescriptors, outputDescriptor);
     }
 
     /**
+     * Given a {@link MetadataKey} of a type and a {@link MetadataContext},
+     * resolves the {@link MetadataType} of the {@link Content} parameter using
+     * the {@link MetadataResolver} associated to the current operation.
      *
-     * @param context
-     * @param key
-     * @return
+     * @param context MetaDataContext of the MetaData resolution
+     * @param key     {@link MetadataKey} of the type which's structure has to be resolved
+     * @return the {@link MetadataType} of the {@link Content} parameter
      */
     public Result<MetadataType> getContentMetadata(MetadataContext context, MetadataKey key)
     {
         Optional<ParameterModel> contentParameter = operationModel.getContentParameter();
         if (!contentParameter.isPresent()){
-            return ResultFactory.failure(Optional.<MetadataType>empty(), "No @Content parameter found", NO_DYNAMIC_TYPE_AVAILABLE, empty());
+            return ResultFactory.failure(null, NO_CONTENT_PARAMETER_FOUND, NO_DYNAMIC_TYPE_AVAILABLE, "");
         }
 
-        if (operationModel.hasDynamicContentType())
+        if (!operationModel.hasDynamicContentType())
         {
-            return getDynamicMetadata(contentParameter.get().getType(), resolver -> resolver.getContentMetadata(context, key));
+            return ResultFactory.success(contentParameter.get().getType());
         }
 
-        return ResultFactory.success(contentParameter.get().getType());
+        return getDynamicMetadata(contentParameter.get().getType(), resolver -> resolver.getContentMetadata(context, key));
     }
 
     /**
+     * Given a {@link MetadataKey} of a type and a {@link MetadataContext},
+     * resolves the {@link MetadataType} of the Operation's output using
+     * the {@link MetadataResolver} associated to the current operation.
      *
-     * @param context
-     * @param key
-     * @return
+     * @param context MetaDataContext of the MetaData resolution
+     * @param key     {@link MetadataKey} of the type which's structure has to be resolved
+     * @return the {@link MetadataType} of the output
      */
     public Result<MetadataType> getOutputMetadata(final MetadataContext context, final MetadataKey key)
     {
-        if (operationModel.hasDynamicOutputType())
+        if (!operationModel.hasDynamicOutputType())
         {
-            return getDynamicMetadata(operationModel.getReturnType(), resolver -> resolver.getOutputMetadata(context, key));
+            return ResultFactory.success(operationModel.getReturnType());
         }
 
-        return ResultFactory.success(operationModel.getReturnType());
+        return getDynamicMetadata(operationModel.getReturnType(), resolver -> resolver.getOutputMetadata(context, key));
     }
 
-    private Result<List<ParameterMetadataDescriptor>> getParameterDescriptors(MetadataContext context, MetadataKey key)
+    /**
+     * @return A List containing a {@link ParameterMetadataDescriptor} for each parameter of the operation
+     *         using only the Java type and ignoring if any parameter has a dynamic type.
+     */
+    private List<ParameterMetadataDescriptor> getStaticParameterDescriptors()
     {
-        List<ParameterMetadataDescriptor> paramDescriptors = new ArrayList<>(operationModel.getParameterModels().size());
+        return operationModel.getParameterModels().stream()
+                .map(model -> new ImmutableParameterMetadataDescriptor(model.getName(), model.getType(), false))
+                .collect(Collectors.toList());
+    }
 
-        paramDescriptors.addAll(getStaticTypedParameters()
+    /**
+     * @return A List containing a {@link ParameterMetadataDescriptor} for each parameter of the operation
+     *         using Java type for static parameters and resolving the dynamic type for the {@link Content}
+     *         if on is available.
+     */
+    private Result<List<ParameterMetadataDescriptor>> getDynamicParameterDescriptors(MetadataContext context, MetadataKey key)
+    {
+        if (!operationModel.hasDynamicContentType())
+        {
+            return ResultFactory.success(getStaticParameterDescriptors());
+        }
+
+        List<ParameterMetadataDescriptor> paramDescriptors = new ArrayList<>(operationModel.getParameterModels().size());
+        paramDescriptors.addAll(operationModel.getParameterModels().stream()
+                                        .filter(p -> !p.equals(operationModel.getContentParameter().get()))
                                         .map(model -> new ImmutableParameterMetadataDescriptor(model.getName(), model.getType(), false))
                                         .collect(Collectors.toList()));
 
-        if (operationModel.getContentParameter().isPresent())
-        {
-            Result<MetadataType> contentResult = getContentMetadata(context, key);
-            paramDescriptors.add(new ImmutableParameterMetadataDescriptor(operationModel.getContentParameter().get().getName(),
-                                                                          contentResult.get(), operationModel.hasDynamicContentType()));
+        Result<MetadataType> contentResult = getContentMetadata(context, key);
+        paramDescriptors.add(new ImmutableParameterMetadataDescriptor(operationModel.getContentParameter().get().getName(),
+                                                                      contentResult.get(), operationModel.hasDynamicContentType()));
 
-            if (!contentResult.isSucess())
-            {
-                return ResultFactory.failure(Optional.of(paramDescriptors), contentResult.getMessage(),contentResult.getFailureType(),
-                                             contentResult.getStacktrace());
-            }
+        if (contentResult.isSucess())
+        {
+            return ResultFactory.success(paramDescriptors);
         }
 
-
-        return ResultFactory.success(paramDescriptors);
+        return ResultFactory.failure(paramDescriptors, contentResult.getMessage(), contentResult.getFailureType(), contentResult.getStacktrace());
     }
 
-    private Stream<ParameterModel> getStaticTypedParameters()
-    {
-        if (!operationModel.getContentParameter().isPresent())
-        {
-            return operationModel.getParameterModels().stream();
-        }
-
-        return operationModel.getParameterModels().stream()
-                .filter(p -> !p.equals(operationModel.getContentParameter().get()));
-    }
-
+    /**
+     * @return The {@link ParameterMetadataDescriptor} that represents the Output metadata of the operation
+     */
     private Result<ParameterMetadataDescriptor> getOutputMetadataDescriptor(MetadataContext context, MetadataKey key)
     {
         if (!operationModel.hasDynamicOutputType())
@@ -198,38 +225,50 @@ public class MetadataMediator
             return ResultFactory.success(new ImmutableParameterMetadataDescriptor(RETURN_PARAM_NAME, operationModel.getReturnType(), false));
         }
 
-        Result<MetadataType> outputResult = getOutputMetadata(context, key);
-        ParameterMetadataDescriptor descriptor = new ImmutableParameterMetadataDescriptor(RETURN_PARAM_NAME, outputResult.get(),
+        Result<MetadataType> result = getOutputMetadata(context, key);
+        ParameterMetadataDescriptor descriptor = new ImmutableParameterMetadataDescriptor(RETURN_PARAM_NAME, result.get(),
                                                                                           operationModel.hasDynamicOutputType());
-        if (outputResult.isSucess())
+        if (result.isSucess())
         {
             return ResultFactory.success(descriptor);
         }
 
-        return ResultFactory.failure(Optional.of(descriptor), outputResult.getMessage(), outputResult.getFailureType(),
-                                     outputResult.getStacktrace());
+        return ResultFactory.failure(descriptor, result.getMessage(), result.getFailureType(), result.getStacktrace());
     }
 
 
+    /**
+     * @return The {@link ParameterMetadataDescriptor} that represents Attributes metadata
+     *         for the value that this operation sets on the output {@link MuleMessage#getAttributes()} field.
+     */
+    private ImmutableParameterMetadataDescriptor getAttributesMetadataDescriptor()
+    {
+        return new ImmutableParameterMetadataDescriptor(MESSAGE_ATTRIBUTES_NAME, operationModel.getAttributesType(), false);
+    }
+
+    /**
+     * Uses the {@link MetadataDelegate} to resolve dynamic metadata of the operation
+     * passing the associated {@link MetadataResolver}.
+     *
+     * @param javaType Java type used as default if no dynamic type is available
+     * @param delegate Delegate which performs the final invocation to the {@link MetadataResolver}
+     * @return The MetadataType resolved by the delegate invocation.
+     *         Sucess if the dynamic type has been successfully fetched, Failure otherwise.
+     */
     private Result<MetadataType> getDynamicMetadata(MetadataType javaType, MetadataDelegate delegate)
     {
         try
         {
-            Optional<MetadataResolverFactory> resolverFactory = operationModel.getMetadataResolverFactory();
-            if (resolverFactory.isPresent())
-            {
-                MetadataType type = delegate.resolve(resolverFactory.get().getResolver());
-                if (type != null && !(type instanceof NullType)){
-                    return ResultFactory.success(type);
-                }
-
+            MetadataResolverFactory resolverFactory = operationModel.getMetadataResolverFactory();
+            MetadataType type = delegate.resolve(resolverFactory.getResolver());
+            if (type != null && !(type instanceof NullType)){
+                return ResultFactory.success(type);
             }
-            return ResultFactory.failure(Optional.of(javaType), "No Dynamic Type available, defaulting to Java type",
-                                         NO_DYNAMIC_TYPE_AVAILABLE, empty());
+            return ResultFactory.failure(javaType, NO_DYNAMIC_TYPE_AVAILABLE_DEFAULTING_TO_JAVA_TYPE, NO_DYNAMIC_TYPE_AVAILABLE, "");
         }
         catch (Exception e)
         {
-            return ResultFactory.failure(Optional.of(javaType), e.getMessage(), e);
+            return ResultFactory.failure(javaType, e.getMessage(), e);
         }
     }
 

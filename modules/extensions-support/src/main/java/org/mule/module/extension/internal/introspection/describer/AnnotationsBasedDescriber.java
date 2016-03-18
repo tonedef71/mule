@@ -55,6 +55,7 @@ import org.mule.extension.api.introspection.declaration.type.ExtensionsTypeLoade
 import org.mule.extension.api.introspection.metadata.MetadataResolverFactory;
 import org.mule.extension.api.introspection.property.DisplayModelProperty;
 import org.mule.extension.api.introspection.property.DisplayModelPropertyBuilder;
+import org.mule.extension.api.metadata.MetadataResolver;
 import org.mule.extension.api.runtime.source.Source;
 import org.mule.metadata.api.ClassTypeLoader;
 import org.mule.module.extension.internal.exception.IllegalConfigurationModelDefinitionException;
@@ -73,6 +74,7 @@ import org.mule.module.extension.internal.model.property.TypeRestrictionModelPro
 import org.mule.module.extension.internal.runtime.exception.DefaultExceptionEnricherFactory;
 import org.mule.module.extension.internal.runtime.executor.ReflectiveOperationExecutorFactory;
 import org.mule.module.extension.internal.runtime.metadata.DefaultMetadataResolverFactory;
+import org.mule.module.extension.internal.runtime.metadata.NullMetadataResolver;
 import org.mule.module.extension.internal.runtime.source.DefaultSourceFactory;
 import org.mule.module.extension.internal.util.IntrospectionUtils;
 import org.mule.util.ArrayUtils;
@@ -411,17 +413,14 @@ public final class AnnotationsBasedDescriber implements Describer
         }
     }
 
-    private java.util.Optional<MetadataResolverFactory> getMetadataResolverFactory(Class<?> extensionType, Method method)
+    private MetadataResolverFactory getMetadataResolverFactory(Class<?> extensionType, Method method)
     {
-        MetadataScope metadataScopeAnnotation = method.getAnnotation(MetadataScope.class);
-        metadataScopeAnnotation = metadataScopeAnnotation == null ? extensionType.getAnnotation(MetadataScope.class) : metadataScopeAnnotation;
+        MetadataScope scopeAnnotation = method.getAnnotation(MetadataScope.class);
+        scopeAnnotation = scopeAnnotation == null ? extensionType.getAnnotation(MetadataScope.class) : scopeAnnotation;
 
-        if (metadataScopeAnnotation != null)
-        {
-            return java.util.Optional.of(new DefaultMetadataResolverFactory(metadataScopeAnnotation.value()));
-        }
+        Class<? extends MetadataResolver> resolver = scopeAnnotation != null ? scopeAnnotation.value() : NullMetadataResolver.class;
 
-        return java.util.Optional.empty();
+        return new DefaultMetadataResolverFactory(resolver);
     }
 
     private void declareConnectionProviders(DeclarationDescriptor declaration, Class<?> extensionType)

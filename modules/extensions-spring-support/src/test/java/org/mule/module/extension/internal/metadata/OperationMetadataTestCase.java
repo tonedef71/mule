@@ -17,7 +17,7 @@ import java.util.Iterator;
 
 import org.junit.Test;
 
-public class OperationMetadataTestCase extends MetadataManagerTestCase
+public class OperationMetadataTestCase extends MetadataExtensionFunctionalTestCase
 {
     @Test
     public void dynamicOperationMetadata() throws Exception

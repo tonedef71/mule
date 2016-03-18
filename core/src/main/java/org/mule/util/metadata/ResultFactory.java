@@ -11,8 +11,6 @@ import org.mule.api.metadata.Result;
 import org.mule.extension.api.metadata.MetadataResolvingException;
 import org.mule.util.ExceptionUtils;
 
-import java.util.Optional;
-
 public final class ResultFactory
 {
 
@@ -51,23 +49,18 @@ public final class ResultFactory
         };
     }
 
-    public static <T> Result<T> failure(Optional<? extends T> payload, String message, Exception e){
-        return failure(payload, message, getExceptionFailure(e), Optional.of(e));
+    public static <T> Result<T> failure(T payload, String message, Exception e){
+        return failure(payload, message, getExceptionFailure(e), ExceptionUtils.getStackTrace(e));
     }
 
-    public static <T> Result<T> failure(Optional<? extends T> payload, String message, FailureType failure, Optional<Exception> e)
-    {
-        return failure(payload, message, failure, e.isPresent() ? ExceptionUtils.getStackTrace(e.get()) : "");
-    }
-
-    public static <T> Result<T> failure(Optional<? extends T> payload, String message, FailureType failure, String stackTrace)
+    public static <T> Result<T> failure(T payload, String message, FailureType failure, String stackTrace)
     {
         return new Result<T>(){
 
             @Override
             public T get()
             {
-                return payload.isPresent() ? payload.get() : null;
+                return payload;
             }
 
             @Override
@@ -94,6 +87,22 @@ public final class ResultFactory
                 return stackTrace;
             }
         };
+    }
+
+    public static <T> Result<T> mergeResults(T payload, Result first, Result second)
+    {
+        if (first.isSucess() && second.isSucess())
+        {
+            return ResultFactory.success(payload);
+        }
+
+        String msg = (first.isSucess() ? "" : "Result Message: " + first.getMessage()) +
+                     (second.isSucess() ? "" : "\n\nResult Message: " + second.getMessage());
+
+        String trace = (first.isSucess() ? "" : "Result Exception: " + first.getStacktrace()) +
+                       (second.isSucess() ? "" : "\n\nResult Exception: " + second.getStacktrace());
+
+        return ResultFactory.failure(payload, msg, FailureType.UNKNOWN, trace);
     }
 
     private static FailureType getExceptionFailure(Exception e)

@@ -7,15 +7,17 @@
 package org.mule.routing;
 
 import static org.hamcrest.core.Is.is;
+import static org.hamcrest.core.IsEqual.equalTo;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
+import static org.hamcrest.core.IsSame.sameInstance;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.fail;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.internal.verification.VerificationModeFactory.times;
+import org.mule.RequestContext;
 import org.mule.VoidMuleEvent;
 import org.mule.api.MessagingException;
 import org.mule.api.MuleEvent;
@@ -59,6 +61,7 @@ public class SynchronousUntilSuccessfulProcessingStrategyTestCase extends Abstra
         when(mockUntilSuccessfulConfiguration.getObjectStore()).thenReturn(null);
         when(mockUntilSuccessfulConfiguration.getDlqMP()).thenReturn(null);
         event = getTestEvent(TEST_DATA);
+        RequestContext.clear();
     }
 
     @Test(expected = InitialisationException.class)
@@ -97,6 +100,7 @@ public class SynchronousUntilSuccessfulProcessingStrategyTestCase extends Abstra
         {
             assertThat(e, instanceOf(RoutingException.class));
             verify(mockRoute, times(DEFAULT_RETRIES + 1)).process(event);
+            assertThat(RequestContext.getEvent(), sameInstance(e.getEvent()));
         }
     }
 
@@ -122,9 +126,19 @@ public class SynchronousUntilSuccessfulProcessingStrategyTestCase extends Abstra
     public void successfulExecution() throws Exception
     {
         SynchronousUntilSuccessfulProcessingStrategy processingStrategy = createProcessingStrategy();
-        when(mockRoute.process(event)).thenReturn(event);
-        assertThat(processingStrategy.route(event), is(event));
+        when(mockRoute.process(event)).thenAnswer(new Answer<MuleEvent>()
+        {
+
+            @Override
+            public MuleEvent answer(InvocationOnMock invocation) throws Throwable
+            {
+                return (MuleEvent) invocation.getArguments()[0];
+            }
+        });
+        MuleEvent response = processingStrategy.route(event);
+        assertThat(response, is(event));
         verify(mockRoute).process(event);
+        assertThat(RequestContext.getEvent(), sameInstance(response));
     }
 
     @Test
@@ -161,15 +175,22 @@ public class SynchronousUntilSuccessfulProcessingStrategyTestCase extends Abstra
     {
         String ackExpression = "some-expression";
         String expressionEvalutaionResult = "new payload";
-        event.setMessage(spy(event.getMessage()));
         when(mockUntilSuccessfulConfiguration.getAckExpression()).thenReturn(ackExpression);
         when(mockUntilSuccessfulConfiguration.getMuleContext().getExpressionManager().evaluate(ackExpression, event)).thenReturn(expressionEvalutaionResult);
         SynchronousUntilSuccessfulProcessingStrategy processingStrategy = createProcessingStrategy();
-        when(mockRoute.process(event)).thenReturn(event);
-        assertThat(processingStrategy.route(event), is(event));
-        verify(mockRoute).process(event);
+        when(mockRoute.process(any(MuleEvent.class))).thenAnswer(new Answer<MuleEvent>()
+        {
+
+            @Override
+            public MuleEvent answer(InvocationOnMock invocation) throws Throwable
+            {
+                return (MuleEvent) invocation.getArguments()[0];
+            }
+        });
+        MuleEvent response = processingStrategy.route(event);
+        assertThat(response.getMessage().getPayloadAsString(), equalTo(expressionEvalutaionResult));
+        verify(mockRoute).process(any(MuleEvent.class));
         verify(mockUntilSuccessfulConfiguration.getMuleContext().getExpressionManager()).evaluate(ackExpression, event);
-        verify(event.getMessage()).setPayload(expressionEvalutaionResult);
     }
 
     @Test

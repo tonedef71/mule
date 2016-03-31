@@ -20,6 +20,7 @@ public class ApplicationDescriptor
 {
     public static final String DEFAULT_CONFIGURATION_RESOURCE = "mule-config.xml";
     public static final String DEFAULT_APP_PROPERTIES_RESOURCE = "mule-app.properties";
+    public static final String DEFAULT_DEPLOY_PROPERTIES_RESOURCE = "mule-deploy.properties";
 
     /**
      * Required to support the '-config spring' shortcut. Don't use a class object so
@@ -39,6 +40,8 @@ public class ApplicationDescriptor
     private Map<String, String> appProperties = new HashMap<String, String>();
 
     private boolean redeploymentEnabled = true;
+
+    private File logConfigFile;
 
     private Set<String> loaderOverride = new HashSet<String>();
 
@@ -140,6 +143,16 @@ public class ApplicationDescriptor
     public void setRedeploymentEnabled(boolean redeploymentEnabled)
     {
         this.redeploymentEnabled = redeploymentEnabled;
+    }
+
+    public void setLogConfigFile(File logConfigFile)
+    {
+        this.logConfigFile = logConfigFile;
+    }
+
+    public File getLogConfigFile()
+    {
+        return logConfigFile;
     }
 
     public Set<String> getLoaderOverride()

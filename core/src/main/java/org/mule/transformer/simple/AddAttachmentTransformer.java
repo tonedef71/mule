@@ -9,13 +9,13 @@ package org.mule.transformer.simple;
 import org.mule.api.MuleMessage;
 import org.mule.api.lifecycle.InitialisationException;
 import org.mule.api.transformer.TransformerException;
-import org.mule.transformer.AbstractMessageTransformer;
+import org.mule.transformer.AbstractReassignableMessageTransformer;
 import org.mule.transformer.types.DataTypeFactory;
 import org.mule.util.AttributeEvaluator;
 
 import java.text.MessageFormat;
 
-public class AddAttachmentTransformer extends AbstractMessageTransformer
+public class AddAttachmentTransformer extends AbstractReassignableMessageTransformer
 {
     private AttributeEvaluator nameEvaluator;
     private AttributeEvaluator valueEvaluator;
@@ -37,7 +37,7 @@ public class AddAttachmentTransformer extends AbstractMessageTransformer
     }
 
     @Override
-    public Object transformMessage(MuleMessage message, String outputEncoding) throws TransformerException
+    public Object transformReassignableMessage(MuleMessage message, String outputEncoding) throws TransformerException
     {
         try
         {

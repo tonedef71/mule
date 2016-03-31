@@ -1,27 +1,63 @@
+/*
+ * Copyright (c) MuleSoft, Inc.  All rights reserved.  http://www.mulesoft.com
+ * The software in this package is published under the terms of the CPAL v1.0
+ * license, a copy of which has been included with this distribution in the
+ * LICENSE.txt file.
+ */
 package org.mule.transformer;
+
+import org.mule.api.MuleMessage;
+import org.mule.api.lifecycle.InitialisationException;
+import org.mule.api.transformer.TransformerException;
+import org.mule.util.AttributeEvaluator;
 
 /**
  *
  */
-public class abstract AbstractReassignableMessageTransfomer extends AbstractMessageTransformer {
+public abstract class AbstractReassignableMessageTransformer extends AbstractMessageTransformer
+{
+  private AttributeEvaluator messageVariableNameSourceEvaluator;
 
-private MuleMessage reassignedSource;
+  @Override
+  public void initialise() throws InitialisationException
   {
-  if(src instanceof MuleMessage)
-  {
-  enc=((MuleMessage)src).getEncoding();
-  }
+    super.initialise();
+    this.messageVariableNameSourceEvaluator.initialize(muleContext.getExpressionManager());
   }
 
-/**
- * Transform the message with no event specified.
- */
-@Override
-public final Object transform(Object src, String enc) throws TransformerException
+  /**
+   * Transform the message
+   */
+  public Object transformMessage(MuleMessage message, String outputEncoding) throws TransformerException
   {
-  if (null != reassignedSource) {
-  src = reassignedSource;
+    MuleMessage src = message;
+
+    final String messageVariableName = this.messageVariableNameSourceEvaluator.resolveValue(message).toString();
+    if (null != messageVariableName && !messageVariableName.trim().isEmpty())
+    {
+      final Object value = message.getInvocationProperty(messageVariableName);
+      if (value instanceof MuleMessage)
+      {
+        src = (MuleMessage)value;
+      }
+    }
+
+    Object retVal = this.transformReassignableMessage(src, outputEncoding);
+    return retVal;
   }
-  super.transform(src)
+
+  @Override
+  public Object clone() throws CloneNotSupportedException
+  {
+    final AbstractReassignableMessageTransformer clone = (AbstractReassignableMessageTransformer) super.clone();
+    clone.setName(this.messageVariableNameSourceEvaluator.getRawValue());
+    return clone;
   }
+
+  public void setMessageVariableName(String messageVariableName)
+  {
+    this.messageVariableNameSourceEvaluator = new AttributeEvaluator(messageVariableName);
+  }
+
+  public abstract Object transformReassignableMessage(MuleMessage message, String outputEncoding) throws TransformerException;
 }

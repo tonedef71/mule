@@ -13,6 +13,7 @@ import org.mule.api.CompletionHandler;
 import org.mule.api.MessagingException;
 import org.mule.api.MuleEvent;
 import org.mule.api.MuleException;
+import org.mule.api.ThreadSafeAccess;
 import org.mule.api.processor.MessageProcessor;
 import org.mule.api.source.MessageSource;
 import org.mule.processor.AbstractNonBlockingMessageProcessor;
@@ -47,7 +48,6 @@ public class SensingNullMessageProcessor extends AbstractNonBlockingMessageProce
     @Override
     protected void processNonBlocking(final MuleEvent event, CompletionHandler completionHandler) throws MuleException
     {
-        sense(event);
         Executors.newSingleThreadExecutor().execute(new Runnable()
         {
             @Override
@@ -55,10 +55,16 @@ public class SensingNullMessageProcessor extends AbstractNonBlockingMessageProce
             {
                 try
                 {
+                    sense(event);
                     MuleEvent eventToProcess = event;
                     if (StringUtils.isNotEmpty(appendString))
                     {
                         eventToProcess = append(eventToProcess);
+                    }
+                    if(eventToProcess instanceof ThreadSafeAccess)
+                    {
+                        // Reset acess given we use same event in new thread
+                        ((ThreadSafeAccess) eventToProcess).resetAccessControl();
                     }
                     event.getReplyToHandler().processReplyTo(eventToProcess, null, null);
                     latch.countDown();

@@ -23,7 +23,7 @@ import org.mule.api.construct.FlowConstruct;
 import org.mule.api.construct.FlowConstructAware;
 import org.mule.api.context.MuleContextAware;
 import org.mule.api.context.WorkManager;
-import org.mule.api.debug.Debuggable;
+import org.mule.api.debug.DebugInfoProvider;
 import org.mule.api.debug.FieldDebugInfo;
 import org.mule.api.debug.FieldDebugInfoFactory;
 import org.mule.api.lifecycle.Initialisable;
@@ -55,7 +55,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 
-public class DefaultHttpRequester extends AbstractNonBlockingMessageProcessor implements Initialisable, MuleContextAware, FlowConstructAware, Debuggable
+public class DefaultHttpRequester extends AbstractNonBlockingMessageProcessor implements Initialisable, MuleContextAware, FlowConstructAware, DebugInfoProvider
 {
 
     public static final List<String> DEFAULT_EMPTY_BODY_METHODS = Lists.newArrayList("GET", "HEAD", "OPTIONS");
@@ -251,9 +251,9 @@ public class DefaultHttpRequester extends AbstractNonBlockingMessageProcessor im
                                      try
                                      {
 
+                                         httpResponseToMuleEvent.convert(muleEvent, httpResponse, httpRequest.getUri());
                                          notificationHelper.fireNotification(muleEvent, httpRequest.getUri(),
                                                                              muleEvent.getFlowConstruct(), MESSAGE_REQUEST_END);
-                                         httpResponseToMuleEvent.convert(muleEvent, httpResponse, httpRequest.getUri());
                                          resetMuleEventForNewThread(muleEvent);
 
 
@@ -324,7 +324,6 @@ public class DefaultHttpRequester extends AbstractNonBlockingMessageProcessor im
         {
             notificationHelper.fireNotification(muleEvent, httpRequest.getUri(), muleEvent.getFlowConstruct(), MESSAGE_REQUEST_BEGIN);
             response = getHttpClient().send(httpRequest, resolveResponseTimeout(muleEvent), followRedirects.resolveBooleanValue(muleEvent), resolveAuthentication(muleEvent));
-            notificationHelper.fireNotification(muleEvent, httpRequest.getUri(), muleEvent.getFlowConstruct(), MESSAGE_REQUEST_END);
         }
         catch (Exception e)
         {
@@ -333,6 +332,7 @@ public class DefaultHttpRequester extends AbstractNonBlockingMessageProcessor im
         }
 
         httpResponseToMuleEvent.convert(muleEvent, response, httpRequest.getUri());
+        notificationHelper.fireNotification(muleEvent, httpRequest.getUri(), muleEvent.getFlowConstruct(), MESSAGE_REQUEST_END);
 
         if (resendRequest(muleEvent, checkRetry, authentication))
         {
@@ -606,9 +606,9 @@ public class DefaultHttpRequester extends AbstractNonBlockingMessageProcessor im
     }
 
     @Override
-    public List<FieldDebugInfo> getDebugInfo(final MuleEvent event)
+    public List<FieldDebugInfo<?>> getDebugInfo(final MuleEvent event)
     {
-        final List<FieldDebugInfo> fields = new ArrayList<>();
+        final List<FieldDebugInfo<?>> fields = new ArrayList<>();
         fields.add(createFieldDebugInfo(URI_DEBUG, String.class, new FieldDebugInfoFactory.FieldEvaluator()
         {
             @Override
@@ -643,10 +643,10 @@ public class DefaultHttpRequester extends AbstractNonBlockingMessageProcessor im
         return fields;
     }
 
-    private List<FieldDebugInfo> getQueryParamsDebugInfo(MuleEvent event)
+    private List<FieldDebugInfo<?>> getQueryParamsDebugInfo(MuleEvent event)
     {
         final ParameterMap queryParams = requestBuilder.getQueryParams(event);
-        List<FieldDebugInfo> params = new ArrayList<>();
+        List<FieldDebugInfo<?>> params = new ArrayList<>();
         for (String paramName : queryParams.keySet())
         {
             final List<String> values = queryParams.getAll(paramName);
@@ -673,7 +673,7 @@ public class DefaultHttpRequester extends AbstractNonBlockingMessageProcessor im
 
             if (httpRequestAuthentication != null)
             {
-                final List<FieldDebugInfo> authenticationFields = new ArrayList<>();
+                final List<FieldDebugInfo<?>> authenticationFields = new ArrayList<>();
                 authenticationFields.add(createFieldDebugInfo(USERNAME_DEBUG, String.class, httpRequestAuthentication.getUsername()));
                 authenticationFields.add(createFieldDebugInfo(DOMAIN_DEBUG, String.class, httpRequestAuthentication.getDomain()));
                 authenticationFields.add(createFieldDebugInfo(PASSWORD_DEBUG, String.class, httpRequestAuthentication.getPassword()));

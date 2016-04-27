@@ -102,6 +102,7 @@ public class DefaultMuleEvent implements MuleEvent, ThreadSafeAccess, Deserializ
 
     private FlowCallStack flowCallStack = new DefaultFlowCallStack();
     private ProcessorsTrace processorsTrace = new DefaultProcessorsTrace();
+    private boolean nonBlocking;
 
     // Constructors
 
@@ -236,6 +237,7 @@ public class DefaultMuleEvent implements MuleEvent, ThreadSafeAccess, Deserializ
         this.timeout = timeout;
         this.transacted = false;
         this.synchronous = resolveEventSynchronicity();
+        this.nonBlocking = isFlowConstructNonBlockingProcessingStrategy();
     }
 
     /**
@@ -295,6 +297,7 @@ public class DefaultMuleEvent implements MuleEvent, ThreadSafeAccess, Deserializ
         this.transacted = endpoint.getTransactionConfig().isTransacted();
         fillProperties(endpoint);
         this.synchronous = resolveEventSynchronicity();
+        this.nonBlocking = isFlowConstructNonBlockingProcessingStrategy();
     }
 
     // Constructors to copy MuleEvent
@@ -347,7 +350,7 @@ public class DefaultMuleEvent implements MuleEvent, ThreadSafeAccess, Deserializ
     public DefaultMuleEvent(MuleMessage message, MuleEvent rewriteEvent, boolean synchronus, boolean shareFlowVars)
     {
         this(message, rewriteEvent, rewriteEvent.getFlowConstruct(), rewriteEvent.getSession(), synchronus,
-             shareFlowVars, rewriteEvent.getExchangePattern());
+             shareFlowVars, rewriteEvent.getExchangePattern(), rewriteEvent.getReplyToHandler());
     }
 
     /**
@@ -357,9 +360,19 @@ public class DefaultMuleEvent implements MuleEvent, ThreadSafeAccess, Deserializ
                             MessageExchangePattern messageExchangePattern)
     {
         this(message, rewriteEvent, rewriteEvent.getFlowConstruct(), rewriteEvent.getSession(), synchronus,
-             shareFlowVars, messageExchangePattern);
+             shareFlowVars, messageExchangePattern, rewriteEvent.getReplyToHandler());
     }
 
+    /**
+     * Copy constructor to be used when synchronicity,
+     * {@link org.mule.MessageExchangePattern} and {@link ReplyToHandler} all need changing.
+     */
+    public DefaultMuleEvent(MuleMessage message, MuleEvent rewriteEvent, boolean synchronus, boolean shareFlowVars,
+                            MessageExchangePattern messageExchangePattern, ReplyToHandler replyToHandler)
+    {
+        this(message, rewriteEvent, rewriteEvent.getFlowConstruct(), rewriteEvent.getSession(), synchronus,
+             shareFlowVars, messageExchangePattern, replyToHandler);
+    }
 
     /**
      * A helper constructor used to rewrite an event payload
@@ -388,9 +401,10 @@ public class DefaultMuleEvent implements MuleEvent, ThreadSafeAccess, Deserializ
                                MuleSession session,
                                boolean synchronous,
                                boolean shareFlowVars,
-                               MessageExchangePattern messageExchangePattern)
+                               MessageExchangePattern messageExchangePattern,
+                               ReplyToHandler replyToHandler)
     {
-        this(message, rewriteEvent, flowConstruct, session, synchronous, rewriteEvent.getReplyToHandler(),
+        this(message, rewriteEvent, flowConstruct, session, synchronous, replyToHandler,
              rewriteEvent.getReplyToDestination(), shareFlowVars, messageExchangePattern);
     }
 
@@ -437,6 +451,7 @@ public class DefaultMuleEvent implements MuleEvent, ThreadSafeAccess, Deserializ
         this.transacted = rewriteEvent.isTransacted();
         this.notificationsEnabled = rewriteEvent.isNotificationsEnabled();
         this.synchronous = synchronous;
+        this.nonBlocking = rewriteEvent.isAllowNonBlocking() || isFlowConstructNonBlockingProcessingStrategy();
         this.flowCallStack = rewriteEvent.getFlowCallStack() == null ? new DefaultFlowCallStack() : rewriteEvent.getFlowCallStack().clone();
         // We want parallel paths of the same flows (i.e.: async events) to contribute to this list and be available at the end, so we copy only the reference.
         this.processorsTrace = rewriteEvent.getProcessorsTrace();
@@ -474,6 +489,7 @@ public class DefaultMuleEvent implements MuleEvent, ThreadSafeAccess, Deserializ
         this.replyToDestination = replyToDestination;
         this.transacted = transacted;
         this.synchronous = synchronous;
+        this.nonBlocking = isFlowConstructNonBlockingProcessingStrategy();
         this.timeout = timeout;
         this.outputStream = outputStream;
     }
@@ -1354,7 +1370,7 @@ public class DefaultMuleEvent implements MuleEvent, ThreadSafeAccess, Deserializ
     @Override
     public boolean isAllowNonBlocking()
     {
-        return exchangePattern.hasResponse() && !isSynchronous();
+        return nonBlocking && !synchronous;
     }
 
     @Override

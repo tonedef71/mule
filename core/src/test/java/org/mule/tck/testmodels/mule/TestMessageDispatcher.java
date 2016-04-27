@@ -6,13 +6,15 @@
  */
 package org.mule.tck.testmodels.mule;
 
+import org.mule.DefaultMuleEvent;
 import org.mule.api.CompletionHandler;
+import org.mule.api.MessagingException;
 import org.mule.api.MuleEvent;
-import org.mule.api.MuleException;
 import org.mule.api.MuleMessage;
 import org.mule.api.endpoint.OutboundEndpoint;
 import org.mule.api.processor.MessageProcessor;
 import org.mule.api.routing.RoutingException;
+import org.mule.api.transport.NonBlockingReplyToHandler;
 import org.mule.processor.TestNonBlockingProcessor;
 import org.mule.transport.AbstractMessageDispatcher;
 
@@ -56,19 +58,37 @@ public class TestMessageDispatcher extends AbstractMessageDispatcher
     }
 
     @Override
-    protected void doSendNonBlocking(MuleEvent event, CompletionHandler<MuleMessage, Exception> completionHandler)
+    protected void doSendNonBlocking(MuleEvent event, final CompletionHandler<MuleMessage, Exception> completionHandler)
     {
         if (endpoint.getEndpointURI().toString().equals("test://AlwaysFail"))
         {
             completionHandler.onFailure(new RoutingException(event, (OutboundEndpoint) endpoint));
         }
-        try
+        else
         {
-            nonBlockingProcessor.process(event);
-        }
-        catch (MuleException e)
-        {
-            completionHandler.onFailure(e);
+            try
+            {
+                final MuleMessage response = event.getMessage();
+                event = new DefaultMuleEvent(event, new NonBlockingReplyToHandler()
+                {
+                    @Override
+                    public void processReplyTo(MuleEvent event, MuleMessage returnMessage, Object replyTo)
+                    {
+                        completionHandler.onCompletion(response);
+                    }
+
+                    @Override
+                    public void processExceptionReplyTo(MessagingException exception, Object replyTo)
+                    {
+                        completionHandler.onFailure(exception);
+                    }
+                });
+                nonBlockingProcessor.process(event);
+            }
+            catch (Exception e)
+            {
+                completionHandler.onFailure(e);
+            }
         }
     }
 

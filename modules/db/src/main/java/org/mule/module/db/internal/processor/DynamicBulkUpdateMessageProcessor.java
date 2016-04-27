@@ -75,10 +75,10 @@ public class DynamicBulkUpdateMessageProcessor extends AbstractBulkUpdateMessage
     }
 
     @Override
-    protected List<FieldDebugInfo> getMessageProcessorDebugInfo(DbConnection connection, MuleEvent muleEvent)
+    protected List<FieldDebugInfo<?>> getMessageProcessorDebugInfo(DbConnection connection, MuleEvent muleEvent)
     {
         MuleEvent eventToUse = resolveSource(muleEvent);
-        final List<FieldDebugInfo> fields = new ArrayList<>();
+        final List<FieldDebugInfo<?>> fields = new ArrayList<>();
 
         BulkQuery bulkQuery;
         try
@@ -91,7 +91,7 @@ public class DynamicBulkUpdateMessageProcessor extends AbstractBulkUpdateMessage
             return fields;
         }
 
-        final List<FieldDebugInfo> queries = new ArrayList<>();
+        final List<FieldDebugInfo<?>> queries = new ArrayList<>();
 
         int queryIndex = 1;
         for (QueryTemplate queryTemplate : bulkQuery.getQueryTemplates())

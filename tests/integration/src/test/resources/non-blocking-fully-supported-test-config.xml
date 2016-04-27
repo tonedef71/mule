@@ -6,7 +6,7 @@
                http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
                http://www.mulesoft.org/schema/mule/test http://www.mulesoft.org/schema/mule/test/current/mule-test.xsd">
 
-    <configuration>
+    <configuration defaultProcessingStrategy="non-blocking">
         <expression-language>
             <global-functions>
                 def assertPayload(){payload == org.mule.tck.junit4.AbstractMuleContextTestCase.TEST_MESSAGE}
@@ -14,14 +14,10 @@
         </expression-language>
     </configuration>
 
-    <flow name="defaultFlow">
+    <flow name="flow">
         <test:assert-intercepting responseSameThread="false" responseExpression="#[assertPayload()]"/>
         <test:non-blocking-processor/>
-    </flow>
-
-    <flow name="nonBlockingFlow">
-        <test:assert-intercepting responseSameThread="false" responseExpression="#[assertPayload()]"/>
-        <test:non-blocking-processor/>
+        <test:assert expression="#[assertPayload()]"/>
     </flow>
 
     <flow name="subFlow">
@@ -32,16 +28,66 @@
     <sub-flow name="subFlowChild">
         <test:assert-intercepting responseSameThread="false" responseExpression="#[assertPayload()]"/>
         <test:non-blocking-processor/>
+        <test:assert expression="#[assertPayload()]"/>
     </sub-flow>
 
     <flow name="childFlow">
         <test:assert-intercepting responseSameThread="false" responseExpression="#[assertPayload()]"/>
+        <expression-component>flowVars['requestThread'] = Thread.currentThread()</expression-component>
         <flow-ref name="childFlowChild"/>
+        <test:assert expression="#[assertPayload()]"/>
+        <test:assert expression="#[flowVars['requestThread'] != Thread.currentThread()]"/>
         <test:assert count="1" expression="#[flow.name=='childFlow']"/>
     </flow>
     <flow name="childFlowChild">
         <test:assert-intercepting responseSameThread="false" responseExpression="#[assertPayload()]"/>
         <test:non-blocking-processor/>
+        <test:assert expression="#[assertPayload()]"/>
+    </flow>
+
+    <flow name="childDefaultFlow">
+        <test:assert-intercepting responseSameThread="false" responseExpression="#[assertPayload()]" message="1"/>
+        <expression-component>flowVars['requestThread'] = Thread.currentThread()</expression-component>
+        <flow-ref name="childDefaultFlowChild"/>
+        <test:assert expression="#[assertPayload()]"/>
+        <test:assert expression="#[flowVars['requestThread'] != Thread.currentThread()]"/>
+        <test:assert expression="#[flow.name=='childDefaultFlow']"/>
+    </flow>
+    <flow name="childDefaultFlowChild" processingStrategy="default">
+        <test:assert-intercepting responseSameThread="false" responseExpression="#[assertPayload()]" message="2"/>
+        <test:non-blocking-processor/>
+        <logger level="ERROR" message="#[Thread.currentThread()]"/>
+        <test:assert expression="#[assertPayload()]"/>
+    </flow>
+
+    <flow name="childSyncFlow">
+        <test:assert-intercepting responseSameThread="true" responseExpression="#[assertPayload()]"/>
+        <expression-component>flowVars['requestThread'] = Thread.currentThread()</expression-component>
+        <flow-ref name="childSyncFlowChild"/>
+        <test:assert expression="#[assertPayload()]"/>
+        <test:assert expression="#[flowVars['requestThread'] == Thread.currentThread()]"/>
+        <test:assert expression="#[flow.name=='childSyncFlow']"/>
+    </flow>
+    <flow name="childSyncFlowChild" processingStrategy="synchronous">
+        <test:assert-intercepting responseSameThread="true" responseExpression="#[assertPayload()]"/>
+        <test:non-blocking-processor/>
+        <test:assert expression="#[assertPayload()]"/>
+    </flow>
+
+    <flow name="childAsyncFlow">
+        <flow-ref name="childAsyncFlowChild"/>
+    </flow>
+    <flow name="childAsyncFlowChild" processingStrategy="asynchronous">
+        <test:non-blocking-processor/>
+        <test:assert expression="#[assertPayload()]"/>
+    </flow>
+
+    <flow name="childQueuedAsyncFlow">
+        <flow-ref name="childQueuedAsyncFlowChild"/>
+    </flow>
+    <flow name="childQueuedAsyncFlowChild" processingStrategy="queued-asynchronous">
+        <test:non-blocking-processor/>
+        <test:assert expression="#[assertPayload()]"/>
     </flow>
 
     <flow name="processorChain">
@@ -51,12 +97,14 @@
             <test:non-blocking-processor/>
         </processor-chain>
         <test:non-blocking-processor/>
+        <test:assert expression="#[assertPayload()]"/>
     </flow>
 
     <flow name="filterAccepts">
         <test:assert-intercepting responseSameThread="false" responseExpression="#[assertPayload()]"/>
         <expression-filter expression="#[true]"/>
         <test:non-blocking-processor/>
+        <test:assert expression="#[assertPayload()]"/>
     </flow>
 
     <flow name="filterRejects">
@@ -90,6 +138,7 @@
         <test:assert-intercepting responseSameThread="false" responseExpression="#[assertPayload()]"/>
         <expression-filter expression="#[true]"/>
         <test:non-blocking-processor/>
+        <test:assert expression="#[assertPayload()]"/>
     </flow>
 
     <flow name="filterBeforeNonBlockingRejects">
@@ -102,12 +151,14 @@
         <test:assert-intercepting responseSameThread="false" responseExpression="#[assertPayload()]"/>
         <custom-processor class="org.mule.processor.SecurityFilterMessageProcessor"/>
         <test:non-blocking-processor/>
+        <test:assert expression="#[assertPayload()]"/>
     </flow>
 
     <flow name="transformer">
         <test:assert-intercepting responseSameThread="false" responseExpression="#[assertPayload()]"/>
         <expression-transformer expression="#[true]"/>
         <test:non-blocking-processor/>
+        <test:assert expression="#[assertPayload()]"/>
     </flow>
 
     <flow name="choice">
@@ -118,9 +169,9 @@
                 <test:non-blocking-processor/>
             </when>
         </choice>
-        <logger message="#[payload]" level="ERROR"/>
         <test:assert-intercepting responseSameThread="false" responseExpression="#[assertPayload()]"/>
         <test:non-blocking-processor/>
+        <test:assert expression="#[assertPayload()]"/>
     </flow>
 
     <flow name="enricher">
@@ -133,6 +184,7 @@
         </enricher>
         <test:assert-intercepting responseSameThread="false" responseExpression="#[assertPayload()]"/>
         <test:non-blocking-processor/>
+        <test:assert expression="#[assertPayload()]"/>
     </flow>
 
     <flow name="response">
@@ -141,6 +193,7 @@
             <test:assert expression="#[assertPayload()]"/>
         </response>
         <test:non-blocking-processor/>
+        <test:assert expression="#[assertPayload()]"/>
     </flow>
 
     <flow name="responseWithNullEvent">
@@ -160,6 +213,7 @@
             <expression-filter expression="#[true]"/>
         </message-filter>
         <test:non-blocking-processor/>
+        <test:assert expression="#[assertPayload()]"/>
     </flow>
 
     <flow name="enricherIssueNonBlocking">
@@ -176,11 +230,25 @@
         <enricher target="flowVars[org.mule.NonBlockingFullySupportedFunctionalTestCase.FOO]">
             <test:non-blocking-processor/>
         </enricher>
+        <test:assert expression="#[assertPayload()]"/>
     </flow>
 
     <flow name="testOutboundEndpoint">
+        <expression-component>flowVars['requestThread'] = Thread.currentThread()</expression-component>
         <test:assert-intercepting responseSameThread="false" responseExpression="#[assertPayload()]"/>
-        <outbound-endpoint address="test://test" exchange-pattern="request-response" />
+        <set-property propertyName="foo" value="bar"/>
+        <outbound-endpoint address="test://test" exchange-pattern="request-response">
+            <set-variable variableName="endpointRequestMPInvoked" value="true"/>
+            <response>
+                <set-variable variableName="endpointResponseMPInvoked" value="true"/>
+            </response>
+            <property key="responseProperties" value="foo"/>
+        </outbound-endpoint>
+        <test:assert expression="#[assertPayload()]" />
+        <test:assert expression="#[flowVars['endpointRequestMPInvoked'] == 'true']" />
+        <test:assert expression="#[flowVars['endpointResponseMPInvoked'] == 'true']" />
+        <test:assert expression="#[message.outboundProperties['foo'] == 'bar']" />
+        <test:assert expression="#[flowVars['requestThread'] != Thread.currentThread]"/>
     </flow>
 
     <flow name="testOutboundEndpointError">
@@ -190,6 +258,31 @@
             <test:assert expression="#[assertPayload()]" />
             <test:assert expression="#[exception.causedBy(org.mule.api.routing.RoutingException)]" />
             <test:assert expression="#[flowVars['requestThread'] != Thread.currentThread]"/>
+        </catch-exception-strategy>
+    </flow>
+
+    <flow name="async">
+        <test:assert-intercepting responseSameThread="false" responseExpression="#[assertPayload()]"/>
+        <async processingStrategy="asynchronous">
+            <set-variable variableName="beforeThread" value="#[Thread.currentThread()]"/>
+            <test:non-blocking-processor/>
+            <test:assert count="1" expression="#[Thread.currentThread()!=beforeThread and assertPayload()]"/>
+        </async>
+        <test:non-blocking-processor/>
+    </flow>
+
+    <flow name="catchExceptionStrategy">
+        <test:assert-intercepting responseSameThread="false" responseExpression="#[assertPayload()]"/>
+        <flow-ref name="catchExceptionStrategyChild"/>
+        <test:assert count="1"/>
+    </flow>
+    <flow name="catchExceptionStrategyChild">
+        <test:component throwException="true"/>
+        <catch-exception-strategy>
+            <test:assert-intercepting responseSameThread="false" responseExpression="#[assertPayload()]"/>
+            <set-variable variableName="beforeThread" value="#[Thread.currentThread()]"/>
+            <test:non-blocking-processor/>
+            <test:assert count="1" expression="#[Thread.currentThread()!=beforeThread  and assertPayload()]"/>
         </catch-exception-strategy>
     </flow>
 

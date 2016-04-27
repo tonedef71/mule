@@ -14,6 +14,7 @@ import org.mule.api.MuleEvent;
 import org.mule.api.MuleException;
 import org.mule.api.MuleMessage;
 import org.mule.api.NonBlockingSupported;
+import org.mule.api.transport.NonBlockingReplyToHandler;
 import org.mule.api.transport.ReplyToHandler;
 
 /**
@@ -23,7 +24,7 @@ import org.mule.api.transport.ReplyToHandler;
  *
  * In order to define the process during the request phase you should override the
  * {@link #processRequest(org.mule.api.MuleEvent)} method. Symmetrically, if you need to define a process to be executed
- * during the response phase, then you should override the {@link #processResponse(org.mule.api.MuleEvent)} method.
+ * during the response phase, then you should override the {@link #processResponse(MuleEvent, MuleEvent)} method.
  * <p/>
  *
  * In some cases you'll have some code that should be always executed, even if an error occurs, for those cases you
@@ -53,12 +54,12 @@ public abstract class AbstractRequestResponseMessageProcessor extends AbstractIn
         MessagingException exception = null;
         try
         {
-            return processResponse(processNext(processRequest(event)));
+            return processResponse(processNext(processRequest(event)), event);
         }
         catch (MessagingException e)
         {
             exception = e;
-            throw e;
+            return processCatch(event, e);
         }
         finally
         {
@@ -66,54 +67,78 @@ public abstract class AbstractRequestResponseMessageProcessor extends AbstractIn
         }
     }
 
-    protected MuleEvent processNonBlocking(MuleEvent event) throws MuleException
+    protected MuleEvent processNonBlocking(final MuleEvent event) throws MuleException
     {
-        event = new DefaultMuleEvent(event, createReplyToHandler(event));
+        MessagingException exception = null;
+        MuleEvent eventToProcess = new DefaultMuleEvent(event, createReplyToHandler(event));
         // Update RequestContext ThreadLocal for backwards compatibility
-        event = OptimizedRequestContext.unsafeSetEvent(event);
+        eventToProcess = OptimizedRequestContext.unsafeSetEvent(eventToProcess);
 
         try
         {
-            MuleEvent result = processNext(processRequest(event));
+            MuleEvent result = processNext(processRequest(eventToProcess));
             if (!(result instanceof NonBlockingVoidMuleEvent))
             {
-                MuleEvent after = processResponse(result);
-                processFinally(after, null);
-                return after;
+                return processResponse(recreateEventWithOriginalReplyToHandler(result, event.getReplyToHandler()), event);
             }
             else
             {
                 return result;
             }
         }
-        catch (MessagingException exception)
+        catch (MessagingException e)
+        {
+            exception = e;
+            return processCatch(event, e);
+        }
+        finally
         {
             processFinally(event, exception);
-            throw exception;
         }
     }
 
-    protected ReplyToHandler createReplyToHandler(final MuleEvent event)
+    protected ReplyToHandler createReplyToHandler(final MuleEvent request)
     {
-        final ReplyToHandler originalReplyToHandler = event.getReplyToHandler();
-        return new ReplyToHandler()
+        final ReplyToHandler originalReplyToHandler = request.getReplyToHandler();
+        return new NonBlockingReplyToHandler()
         {
             @Override
             public void processReplyTo(MuleEvent event, MuleMessage returnMessage, Object replyTo) throws MuleException
             {
-                MuleEvent response = processResponse(recreateEventWithOriginalReplyToHandler(event, originalReplyToHandler));
-                if (!NonBlockingVoidMuleEvent.getInstance().equals(response))
+                try
                 {
-                    originalReplyToHandler.processReplyTo(response, null, null);
+                    MuleEvent response = processResponse(recreateEventWithOriginalReplyToHandler(event, originalReplyToHandler), request);
+                    if (!NonBlockingVoidMuleEvent.getInstance().equals(response))
+                    {
+                        originalReplyToHandler.processReplyTo(response, null, null);
+                    }
                 }
-                processFinally(event, null);
+                catch (Exception e)
+                {
+                    processExceptionReplyTo(new MessagingException(event, e), null);
+                }
+                finally
+                {
+                    processFinally(event, null);
+                }
             }
 
             @Override
             public void processExceptionReplyTo(MessagingException exception, Object replyTo)
             {
-                originalReplyToHandler.processExceptionReplyTo(exception, replyTo);
-                processFinally(exception.getEvent(), exception);
+                try
+                {
+                    MuleEvent handledEvent = processCatch(exception.getEvent(), exception);
+                    originalReplyToHandler.processReplyTo(handledEvent, null, null);
+                }
+                catch (Exception e)
+                {
+                    originalReplyToHandler.processExceptionReplyTo(exception, replyTo);
+                }
+                finally
+                {
+                    processFinally(exception.getEvent(), exception);
+                }
             }
         };
     }
@@ -129,33 +154,48 @@ public abstract class AbstractRequestResponseMessageProcessor extends AbstractIn
         return event;
     }
 
-    private boolean isNonBlocking(MuleEvent event)
+    protected boolean isNonBlocking(MuleEvent event)
     {
-        return event.isAllowNonBlocking() && event.getReplyToHandler() != null && next != null;
+        return event.isAllowNonBlocking() && event.getReplyToHandler() != null;
     }
 
     /**
      * Processes the request phase before the next message processor is invoked.
      *
-     * @param event event to be processed.
+     * @param request event to be processed.
      * @return result of request processing.
      * @throws MuleException exception thrown by implementations of this method whiile performing response processing
      */
-    protected MuleEvent processRequest(MuleEvent event) throws MuleException
+    protected MuleEvent processRequest(MuleEvent request) throws MuleException
     {
-        return event;
+        return request;
     }
 
     /**
      * Processes the response phase after the next message processor and it's response phase have been invoked
      *
-     * @param event event to be processed.
+     * @param response response event to be processed.
+     * @param request the request event
      * @return result of response processing.
      * @throws MuleException exception thrown by implementations of this method whiile performing response processing
      */
-    protected MuleEvent processResponse(MuleEvent event) throws MuleException
+    protected MuleEvent processResponse(MuleEvent response, final MuleEvent request) throws MuleException
     {
-        return event;
+        return processResponse(response);
+    }
+
+    /**
+     * Processes the response phase after the next message processor and it's response phase have been invoked.  This
+     * method is deprecated, use {@link #processResponse(MuleEvent, MuleEvent)} instead.
+     *
+     * @param response response event to be processed.
+     * @return result of response processing.
+     * @throws MuleException exception thrown by implementations of this method whiile performing response processing
+     */
+    @Deprecated
+    protected MuleEvent processResponse(MuleEvent response) throws MuleException
+    {
+        return response;
     }
 
     /**
@@ -171,6 +211,11 @@ public abstract class AbstractRequestResponseMessageProcessor extends AbstractIn
     protected void processFinally(MuleEvent event, MessagingException exception)
     {
 
+    }
+
+    protected MuleEvent processCatch(MuleEvent event, MessagingException exception) throws MessagingException
+    {
+        throw exception;
     }
 
 }

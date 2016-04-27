@@ -14,7 +14,6 @@ import org.mule.api.lifecycle.Disposable;
 import org.mule.api.lifecycle.Initialisable;
 import org.mule.api.lifecycle.LifecycleException;
 import org.mule.api.lifecycle.LifecyclePhase;
-import org.mule.api.lifecycle.Stoppable;
 import org.mule.api.model.Model;
 import org.mule.api.routing.OutboundRouter;
 import org.mule.api.routing.OutboundRouterCollection;
@@ -68,7 +67,7 @@ public class MuleContextDisposePhase extends DefaultLifecyclePhase
         orderedObjects.add(new NotificationLifecycleObject(Agent.class));
         orderedObjects.add(new NotificationLifecycleObject(Connector.class));
         orderedObjects.add(new NotificationLifecycleObject(Config.class));
-        orderedObjects.add(new NotificationLifecycleObject(Stoppable.class));
+        orderedObjects.add(new NotificationLifecycleObject(Disposable.class));
         orderedObjects.add(new NotificationLifecycleObject(Object.class));
 
         //Can call dispose from all lifecycle Phases
@@ -99,7 +98,17 @@ public class MuleContextDisposePhase extends DefaultLifecyclePhase
             return;
         }
         //retain default Lifecycle behaviour
-        super.applyLifecycle(o);
+        try
+        {
+            super.applyLifecycle(o);
+        }
+        catch (Exception e)
+        {
+            if (logger.isWarnEnabled())
+            {
+                logger.warn("Failed to dispose object " + o, e);
+            }
+        }
 
         List<AnnotationMetaData> annos = AnnotationUtils.getMethodAnnotations(o.getClass(), PreDestroy.class);
         if (annos.size() == 0)

@@ -55,10 +55,10 @@ public abstract class AbstractSingleQueryDbMessageProcessor extends AbstractDbMe
     protected abstract Object doExecuteQuery(DbConnection connection, Query query) throws SQLException;
 
     @Override
-    protected List<FieldDebugInfo> getMessageProcessorDebugInfo(DbConnection connection, MuleEvent muleEvent)
+    protected List<FieldDebugInfo<?>> getMessageProcessorDebugInfo(DbConnection connection, MuleEvent muleEvent)
     {
         MuleEvent eventToUse = resolveSource(muleEvent);
-        final List<FieldDebugInfo> fields = new ArrayList<>();
+        final List<FieldDebugInfo<?>> fields = new ArrayList<>();
 
         Query resolvedQuery;
         try
@@ -74,7 +74,7 @@ public abstract class AbstractSingleQueryDbMessageProcessor extends AbstractDbMe
         fields.add(createFieldDebugInfo(SQL_TEXT_DEBUG_FIELD, String.class, resolvedQuery.getQueryTemplate().getSqlText()));
         fields.add(createFieldDebugInfo(TYPE_DEBUG_FIELD, String.class, resolvedQuery.getQueryTemplate().getType().toString()));
 
-        final List<FieldDebugInfo> paramFields = new ArrayList<>();
+        final List<FieldDebugInfo<?>> paramFields = new ArrayList<>();
         int paramIndex = 1;
         for (QueryParamValue queryParamValue : resolvedQuery.getParamValues())
         {

@@ -4581,6 +4581,7 @@
                 <xsd:attribute name="attachmentName" type="attributeType" use="required"/>
                 <xsd:attribute name="value" type="attributeType" use="required"/>
                 <xsd:attribute name="contentType" type="attributeType" use="required"/>
+                <xsd:attribute name="messageVariableName" type="attributeType" use="optional" default=""/>
             </xsd:extension>
         </xsd:complexContent>
     </xsd:complexType>

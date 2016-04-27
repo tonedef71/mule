@@ -6,9 +6,11 @@
  */
 package org.mule.transformer;
 
+import org.apache.commons.lang.StringUtils;
 import org.mule.api.MuleMessage;
 import org.mule.api.lifecycle.InitialisationException;
 import org.mule.api.transformer.TransformerException;
+import org.mule.transformer.types.DataTypeFactory;
 import org.mule.util.AttributeEvaluator;
 
 /**
@@ -17,6 +19,12 @@ import org.mule.util.AttributeEvaluator;
 public abstract class AbstractReassignableMessageTransformer extends AbstractMessageTransformer
 {
   private AttributeEvaluator messageVariableNameSourceEvaluator;
+
+  public AbstractReassignableMessageTransformer() {
+    super();
+    registerSourceType(DataTypeFactory.OBJECT);
+    setReturnDataType(DataTypeFactory.OBJECT);
+  }
 
   @Override
   public void initialise() throws InitialisationException
@@ -32,17 +40,22 @@ public abstract class AbstractReassignableMessageTransformer extends AbstractMes
   {
     MuleMessage src = message;
 
-    final String messageVariableName = this.messageVariableNameSourceEvaluator.resolveValue(message).toString();
-    if (null != messageVariableName && !messageVariableName.trim().isEmpty())
+    final Object messageVariableValue = (null != this.messageVariableNameSourceEvaluator) ? this.messageVariableNameSourceEvaluator.resolveValue(message) : null;
+    final String messageVariableName = (null != messageVariableValue) ? messageVariableValue.toString() : null;
+    if (StringUtils.isNotBlank(messageVariableName))
     {
       final Object value = message.getInvocationProperty(messageVariableName);
-      if (value instanceof MuleMessage)
+      if (MuleMessage.class.isAssignableFrom(value.getClass()))
       {
         src = (MuleMessage)value;
       }
+      else {
+        final Throwable cause = new IllegalArgumentException(String.format("Value of 'messageVariableName' [%s] does not reference a MuleMessage", messageVariableName));
+        throw new TransformerException(this, cause);
+      }
     }
 
-    Object retVal = this.transformReassignableMessage(src, outputEncoding);
+    final Object retVal = this.transformReassignableMessage(src, outputEncoding);
     return retVal;
   }
 
@@ -50,7 +63,7 @@ public abstract class AbstractReassignableMessageTransformer extends AbstractMes
   public Object clone() throws CloneNotSupportedException
   {
     final AbstractReassignableMessageTransformer clone = (AbstractReassignableMessageTransformer) super.clone();
-    clone.setName(this.messageVariableNameSourceEvaluator.getRawValue());
+    clone.setMessageVariableName(this.messageVariableNameSourceEvaluator.getRawValue());
     return clone;
   }
 

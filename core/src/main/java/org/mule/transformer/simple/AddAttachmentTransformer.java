@@ -23,6 +23,7 @@ public class AddAttachmentTransformer extends AbstractReassignableMessageTransfo
 
     public AddAttachmentTransformer()
     {
+        super();
         registerSourceType(DataTypeFactory.OBJECT);
         setReturnDataType(DataTypeFactory.OBJECT);
     }
@@ -77,6 +78,7 @@ public class AddAttachmentTransformer extends AbstractReassignableMessageTransfo
         AddAttachmentTransformer clone = (AddAttachmentTransformer) super.clone();
         clone.setName(this.nameEvaluator.getRawValue());
         clone.setValue(this.valueEvaluator.getRawValue());
+        clone.setContentType(this.contentTypeEvaluator.getRawValue());
         return clone;
     }
 

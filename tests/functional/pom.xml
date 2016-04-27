@@ -200,6 +200,16 @@
             <artifactId>aspectjweaver</artifactId>
             <scope>test</scope>
         </dependency>
-
+        <!-- Testing -->
+      <dependency>
+        <groupId>org.mule.transports</groupId>
+        <artifactId>mule-transport-http</artifactId>
+        <scope>provided</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.mule.transports</groupId>
+        <artifactId>mule-transport-vm</artifactId>
+        <scope>provided</scope>
+      </dependency>
     </dependencies>
 </project>
